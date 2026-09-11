@@ -1,6 +1,6 @@
 # Preparação de Sistemas Operacionais
 
-Script desenvolvido para automatizar a preparação de computadores **Ubuntu Linux** utilizados nas aulas da disciplina de **Sistemas Operacionais**.
+Script desenvolvido para automatizar a preparação de computadores **Ubuntu Linux** utilizados nas aulas da disciplina de **Sistemas Operacionais** na UVV.
 
 O objetivo é reunir em um único script as instalações e configurações realizadas durante as aulas, facilitando a preparação dos computadores dos alunos e evitando a necessidade de executar diversos comandos manualmente.
 
