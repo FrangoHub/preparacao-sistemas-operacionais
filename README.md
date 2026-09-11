@@ -107,7 +107,7 @@ Esse arquivo pode ser utilizado para verificar o que foi executado e identificar
 
 ## Contexto
 
-Este projeto foi desenvolvido como parte das atividades da disciplina de **Sistemas Operacionais**, com o objetivo de automatizar a configuração dos ambientes Linux utilizados pelos alunos.
+Este projeto foi desenvolvido como parte das atividades da disciplina de **Sistemas Operacionais**, com o objetivo de automatizar a configuração dos ambientes virtuais Linux utilizados pelos alunos na aula.
 
 ## Licença
 
