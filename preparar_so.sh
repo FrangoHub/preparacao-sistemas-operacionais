@@ -1,16 +1,24 @@
-```bash
 #!/bin/bash
 
 # ============================================================
 # PREPARAÇÃO DE SISTEMAS OPERACIONAIS
 # ============================================================
 #
-# Este script foi desenvolvido para automatizar a preparação
-# de um ambiente Linux baseado em Debian/Ubuntu.
+# Este script automatiza a preparação de um ambiente Linux
+# para a disciplina de Sistemas Operacionais.
+#
+# O script foi desenvolvido para distribuições baseadas em
+# Debian que utilizam APT/DPKG, como:
+#
+#   - Ubuntu
+#   - Debian
+#   - Linux Mint
+#   - Pop!_OS
+#   - outras distribuições derivadas do Debian
 #
 # O script é dividido em 3 etapas:
 #
-#   ETAPA 1
+# ETAPA 1:
 #   - zsh
 #   - curl
 #   - git
@@ -19,7 +27,7 @@
 #   - Oh My Zsh
 #   - tema Agnoster
 #
-#   ETAPA 2
+# ETAPA 2:
 #   - emacs
 #   - figlet
 #   - lolcat
@@ -30,19 +38,20 @@
 #   - Cool Retro Term
 #   - Mari0
 #
-#   ETAPA 3
+# ETAPA 3:
 #   - neofetch
 #   - jq
 #   - bat
 #   - alias cat="batcat"
 #
-# Características:
-#   - Compatível com distribuições que utilizam APT/DPKG
-#   - Verificação dos pacotes antes de cada etapa
-#   - Confirmação do usuário antes de executar cada etapa
-#   - Pode ser executado através de "curl | bash"
-#   - Cria arquivos de controle para evitar repetição
-#   - Registra a execução em um arquivo de log
+# Recursos:
+#   - Confirmação antes de cada etapa
+#   - Verificação dos pacotes
+#   - Execução através de curl | bash
+#   - Marcadores para evitar repetir etapas concluídas
+#   - Arquivo de log
+#   - Compatibilidade com diferentes usuários
+#   - Não depende de um caminho específico de usuário
 #
 # ============================================================
 
@@ -51,32 +60,35 @@
 # CONFIGURAÇÃO DO BASH
 # ============================================================
 
-# Faz o script ser encerrado caso algum comando importante
-# retorne um código de erro diferente de zero.
+# Faz o script parar quando um comando importante retornar
+# um código de erro.
 #
-# Não utilizamos "set -u" nem "set -o pipefail" aqui para
-# evitar problemas desnecessários durante a execução remota
-# através de "curl | bash".
+# Exemplo:
+#
+#     sudo apt-get install pacote
+#
+# Se a instalação falhar, o script será interrompido em vez
+# de continuar fingindo que tudo funcionou.
 set -e
 
 
 # ============================================================
-# CORES UTILIZADAS NAS MENSAGENS
+# CORES DO TERMINAL
 # ============================================================
 
-# Código ANSI para azul.
+# Azul para mensagens informativas.
 BLUE='\033[0;34m'
 
-# Código ANSI para verde.
+# Verde para operações concluídas com sucesso.
 GREEN='\033[0;32m'
 
-# Código ANSI para amarelo.
+# Amarelo para avisos.
 YELLOW='\033[1;33m'
 
-# Código ANSI para vermelho.
+# Vermelho para erros.
 RED='\033[0;31m'
 
-# Código ANSI para restaurar a cor original do terminal.
+# Restaura a cor padrão do terminal.
 NC='\033[0m'
 
 
@@ -84,28 +96,31 @@ NC='\033[0m'
 # FUNÇÕES DE MENSAGEM
 # ============================================================
 
-# Mostra uma mensagem informativa.
+# Exibe uma mensagem informativa.
 info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-# Mostra uma mensagem indicando que algo foi concluído.
+
+# Exibe uma mensagem de sucesso.
 success() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
 
-# Mostra um aviso.
+
+# Exibe uma mensagem de aviso.
 warning() {
     echo -e "${YELLOW}[AVISO]${NC} $1"
 }
 
-# Mostra uma mensagem de erro.
+
+# Exibe uma mensagem de erro.
 error() {
     echo -e "${RED}[ERRO]${NC} $1"
 }
 
-# Mostra um título para separar visualmente as partes
-# do programa no terminal.
+
+# Exibe um título para separar visualmente cada seção.
 title() {
     echo
     echo "============================================================"
@@ -119,21 +134,30 @@ title() {
 # VERIFICAÇÃO DO USUÁRIO
 # ============================================================
 
-# O script deve ser executado por um usuário normal.
+# O script não deve ser executado diretamente como root.
 #
-# Não queremos que o usuário execute:
+# O motivo é que algumas configurações, como:
+#
+#   ~/.zshrc
+#   ~/.oh-my-zsh
+#
+# devem pertencer ao usuário que está preparando o sistema,
+# e não ao usuário root.
+#
+# Portanto:
+#
+#     bash preparar_so.sh
+#
+# é correto.
+#
+# Enquanto:
 #
 #     sudo bash preparar_so.sh
 #
-# porque o script utiliza "sudo" somente nos comandos que
-# realmente precisam de privilégios administrativos.
-#
-# Além disso, executar tudo como root faria com que arquivos
-# como ~/.zshrc e ~/.oh-my-zsh fossem criados no diretório
-# /root em vez do diretório do usuário.
+# não é recomendado.
 if [ "$EUID" -eq 0 ]; then
     error "Não execute este script como root."
-    error "Execute como usuário normal."
+    error "Execute o script como usuário normal."
     exit 1
 fi
 
@@ -142,8 +166,8 @@ fi
 # VERIFICAÇÃO DO SISTEMA OPERACIONAL
 # ============================================================
 
-# O arquivo /etc/os-release contém informações sobre a
-# distribuição Linux instalada.
+# O arquivo /etc/os-release contém informações sobre
+# a distribuição Linux instalada.
 #
 # Exemplos:
 #
@@ -158,100 +182,93 @@ fi
 #
 # Pop!_OS:
 #   ID=pop
-#
-# O comando "source" transforma as variáveis desse arquivo
-# em variáveis disponíveis para o script.
 if [ ! -f /etc/os-release ]; then
+    error "O arquivo /etc/os-release não foi encontrado."
     error "Não foi possível identificar o sistema operacional."
     exit 1
 fi
 
+
+# Carrega as informações do sistema operacional.
 source /etc/os-release
 
 
-# Verifica se o gerenciador de pacotes APT está instalado.
+# ============================================================
+# VERIFICAÇÃO DO APT
+# ============================================================
+
+# O script utiliza o APT para instalar os programas.
 #
-# Como o objetivo deste projeto é trabalhar com distribuições
-# baseadas em Debian, o APT é necessário.
+# Se apt-get não existir, provavelmente o sistema não é
+# compatível com este script.
 if ! command -v apt-get >/dev/null 2>&1; then
-    error "O sistema não possui o apt-get."
-    error "Este script foi desenvolvido para sistemas baseados em Debian/Ubuntu."
+    error "O comando apt-get não foi encontrado."
+    error "Este script foi desenvolvido para sistemas baseados em Debian."
     exit 1
 fi
 
 
-# Verifica se o DPKG está instalado.
-#
-# O DPKG é utilizado pelo Debian e seus derivados para
-# gerenciar os pacotes .deb.
+# ============================================================
+# VERIFICAÇÃO DO DPKG
+# ============================================================
+
+# O DPKG é o sistema de gerenciamento de pacotes utilizado
+# pelo Debian e seus derivados.
 if ! command -v dpkg >/dev/null 2>&1; then
-    error "O sistema não possui o dpkg."
+    error "O comando dpkg não foi encontrado."
     exit 1
 fi
 
 
-# Verifica se o sudo está instalado.
-#
-# O sudo será utilizado para executar somente os comandos
-# que precisam de privilégios administrativos.
+# ============================================================
+# VERIFICAÇÃO DO SUDO
+# ============================================================
+
+# O sudo será utilizado somente nos comandos que necessitam
+# de privilégios administrativos.
 if ! command -v sudo >/dev/null 2>&1; then
     error "O comando sudo não está instalado."
     exit 1
 fi
 
 
-# Obtém a arquitetura do sistema.
+# ============================================================
+# INFORMAÇÕES DO SISTEMA
+# ============================================================
+
+# Descobre a arquitetura do sistema.
 #
-# Exemplos:
+# Normalmente:
 #
 #   amd64
 #   arm64
 #
-# Isso é útil principalmente para registrar informações
-# do ambiente no log.
 ARQUITETURA="$(dpkg --print-architecture)"
 
 
-# ============================================================
-# VARIÁVEIS PRINCIPAIS
-# ============================================================
-
-# Diretório pessoal do usuário que executou o script.
+# Guarda o diretório HOME do usuário.
 #
-# Exemplo:
-#
-#   /home/frangogamer
-#
-# Usamos $HOME em vez de colocar um caminho fixo para que
-# o script funcione para diferentes usuários.
+# Não colocamos um caminho fixo como /home/frangogamer,
+# pois o script deve funcionar para qualquer usuário.
 HOME_USUARIO="$HOME"
 
 
-# Arquivo utilizado para registrar toda a execução do script.
-#
-# Isso permite verificar posteriormente:
-#
-#   - quais etapas foram executadas;
-#   - quais pacotes foram instalados;
-#   - quais erros ocorreram;
-#   - quando o script foi executado.
+# Caminho do arquivo que armazenará o log.
 LOG_FILE="$HOME_USUARIO/preparacao_sistemas_operacionais.log"
 
 
-# Arquivo de controle da Etapa 1.
+# ============================================================
+# MARCADORES DAS ETAPAS
+# ============================================================
+
+# Cada etapa possui um arquivo marcador.
 #
-# Quando a etapa termina com sucesso, este arquivo é criado.
+# Quando uma etapa termina corretamente, o arquivo é criado.
 #
-# Em uma execução futura, o script verifica sua existência
-# e não executa novamente a etapa.
+# Em uma execução futura, o script verifica se o arquivo
+# existe e pula a etapa.
 ETAPA1="$HOME_USUARIO/.sistemas_operacionais_etapa1"
-
-
-# Arquivo de controle da Etapa 2.
 ETAPA2="$HOME_USUARIO/.sistemas_operacionais_etapa2"
-
-
-# Arquivo de controle da Etapa 3.
 ETAPA3="$HOME_USUARIO/.sistemas_operacionais_etapa3"
 
 
@@ -263,54 +280,73 @@ ZSHRC="$HOME_USUARIO/.zshrc"
 # INÍCIO DO LOG
 # ============================================================
 
-# "tee" permite que a saída continue aparecendo no terminal
-# enquanto também é gravada no arquivo de log.
+# O comando tee permite mostrar a saída no terminal e,
+# simultaneamente, salvar tudo no arquivo de log.
 #
-# Dessa forma, o usuário consegue acompanhar a instalação
-# normalmente e ainda possui um histórico da execução.
+# O "-a" faz com que novas execuções sejam adicionadas
+# ao final do arquivo, em vez de apagar o conteúdo anterior.
+#
+# "2>&1" faz com que mensagens de erro também sejam
+# direcionadas para o log.
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 
 # ============================================================
-# INFORMAÇÕES DO SISTEMA
+# INFORMAÇÕES INICIAIS
 # ============================================================
 
 title "PREPARAÇÃO DO SISTEMA OPERACIONAL"
 
+
+# Mostra o nome completo da distribuição.
 echo "Sistema operacional : ${PRETTY_NAME:-Desconhecido}"
+
+
+# Mostra o identificador da distribuição.
 echo "ID da distribuição  : ${ID:-Desconhecido}"
+
+
+# Mostra a arquitetura.
 echo "Arquitetura         : $ARQUITETURA"
+
+
+# Mostra o usuário que executou o script.
 echo "Usuário             : $USER"
+
+
+# Mostra o diretório HOME.
 echo "HOME                : $HOME_USUARIO"
+
+
+# Mostra o caminho do arquivo de log.
+echo "Arquivo de log      : $LOG_FILE"
+
 echo
 
 
 # ============================================================
-# VERIFICAÇÃO DO SUDO
+# VERIFICAÇÃO DAS PERMISSÕES
 # ============================================================
 
-# Solicita a senha do usuário antes de começar.
-#
-# Isso evita que o script pare no meio da instalação esperando
-# uma senha do sudo.
 info "Verificando permissões administrativas..."
 
+
+# Solicita a senha do sudo antecipadamente.
+#
+# Dessa forma, o usuário não será surpreendido por uma
+# solicitação de senha no meio da instalação.
 sudo -v
+
 
 success "Permissões administrativas confirmadas."
 
 
 # ============================================================
-# LISTAS DE PACOTES
+# LISTA DE PACOTES DA ETAPA 1
 # ============================================================
 
-# Pacotes necessários para a Etapa 1.
-#
-# As listas são mantidas em arrays para facilitar:
-#
-#   - verificar quais pacotes existem;
-#   - instalar os pacotes;
-#   - adicionar/remover pacotes futuramente.
+# Array contendo todos os pacotes necessários para a
+# primeira etapa.
 PACOTES_ETAPA1=(
     "zsh"
     "curl"
@@ -320,7 +356,11 @@ PACOTES_ETAPA1=(
 )
 
 
-# Pacotes necessários para a Etapa 2.
+# ============================================================
+# LISTA DE PACOTES DA ETAPA 2
+# ============================================================
+
+# Array contendo os pacotes da segunda etapa.
 PACOTES_ETAPA2=(
     "emacs"
     "figlet"
@@ -331,7 +371,11 @@ PACOTES_ETAPA2=(
 )
 
 
-# Pacotes necessários para a Etapa 3.
+# ============================================================
+# LISTA DE PACOTES DA ETAPA 3
+# ============================================================
+
+# Array contendo os pacotes da terceira etapa.
 PACOTES_ETAPA3=(
     "neofetch"
     "jq"
@@ -340,56 +384,54 @@ PACOTES_ETAPA3=(
 
 
 # ============================================================
-# FUNÇÃO: VERIFICAR SE UM PACOTE ESTÁ INSTALADO
+# FUNÇÃO: PACOTE INSTALADO
 # ============================================================
 
-# Recebe o nome de um pacote como parâmetro.
+# Verifica se determinado pacote já está instalado.
 #
-# Exemplo:
+# Retorno:
 #
-#     pacote_instalado "git"
-#
-# Retorna:
-#
-#     0 -> instalado
-#     1 -> não instalado
+#   0 = instalado
+#   1 = não instalado
 pacote_instalado() {
 
+    # Primeiro argumento recebido pela função.
     local PACOTE="$1"
 
+
+    # dpkg-query consulta o banco de dados de pacotes.
+    #
+    # ${Status} retorna o estado do pacote.
+    #
+    # grep verifica se o estado é:
+    #
+    #     install ok installed
     if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
 
         return 0
     fi
 
+
     return 1
 }
 
 
 # ============================================================
-# FUNÇÃO: VERIFICAR SE UM PACOTE ESTÁ DISPONÍVEL
+# FUNÇÃO: PACOTE DISPONÍVEL
 # ============================================================
 
-# Essa função é diferente de "pacote_instalado".
+# Verifica se um pacote:
 #
-# Um pacote pode não estar instalado, mas ainda assim existir
-# nos repositórios configurados no sistema.
-#
-# Exemplo:
-#
-#     git
-#
-# pode estar disponível para instalação, mesmo que ainda
-# não esteja instalado.
+#   - já está instalado
+# ou
+#   - está disponível nos repositórios configurados.
 pacote_disponivel() {
 
     local PACOTE="$1"
 
 
-    # Primeiro verificamos se o pacote já está instalado.
-    #
-    # Se estiver instalado, consideramos que ele está disponível.
+    # Se o pacote já estiver instalado, ele está disponível.
     if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
 
@@ -397,39 +439,40 @@ pacote_disponivel() {
     fi
 
 
-    # Caso não esteja instalado, verificamos se o APT conhece
-    # esse pacote.
+    # apt-cache show consulta as informações disponíveis
+    # nos repositórios configurados.
     if apt-cache show "$PACOTE" >/dev/null 2>&1; then
+
         return 0
     fi
 
 
-    # Caso nenhuma das verificações tenha funcionado,
-    # o pacote não está disponível.
+    # Pacote não encontrado.
     return 1
 }
 
 
 # ============================================================
-# FUNÇÃO: VERIFICAR PACOTES DE UMA ETAPA
+# FUNÇÃO: VERIFICAR PACOTES DA ETAPA
 # ============================================================
 
-# Antes de começar uma etapa, verificamos todos os pacotes
-# necessários.
+# Recebe uma lista de pacotes e verifica se todos estão
+# disponíveis.
 #
-# Isso evita iniciar uma etapa e descobrir somente no meio
-# da instalação que determinado pacote não existe nos
-# repositórios daquela distribuição.
+# Exemplo:
+#
+#     verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"
 verificar_pacotes_etapa() {
 
-    # Cria uma variável local contendo todos os argumentos
-    # recebidos pela função.
+    # Recebe todos os argumentos da função como um array.
     local PACOTES=("$@")
 
-    # Array que armazenará os pacotes ausentes.
+
+    # Array que armazenará os pacotes que não foram encontrados.
     local FALTANDO=()
 
-    # Variável utilizada no loop.
+
+    # Variável usada pelo loop.
     local PACOTE
 
 
@@ -438,22 +481,21 @@ verificar_pacotes_etapa() {
     echo
 
 
-    # Percorre todos os pacotes recebidos.
+    # Percorre todos os pacotes.
     for PACOTE in "${PACOTES[@]}"; do
 
         # Verifica se o pacote está disponível.
         if pacote_disponivel "$PACOTE"; then
 
-            # Pacote encontrado.
             success "$PACOTE"
 
         else
 
-            # Pacote não encontrado.
             error "$PACOTE — não encontrado nos repositórios."
 
             # Adiciona o pacote à lista de ausentes.
             FALTANDO+=("$PACOTE")
+
         fi
 
     done
@@ -462,18 +504,21 @@ verificar_pacotes_etapa() {
     echo
 
 
-    # Verifica se o array FALTANDO possui algum elemento.
+    # ${#FALTANDO[@]} representa a quantidade de itens
+    # existentes no array.
     if [ "${#FALTANDO[@]}" -gt 0 ]; then
 
         error "Existem pacotes necessários que não estão disponíveis."
-        echo
 
+        echo
         echo "Pacotes ausentes:"
 
-        # Mostra todos os pacotes ausentes.
+
+        # Mostra cada pacote ausente.
         for PACOTE in "${FALTANDO[@]}"; do
             echo "  ✗ $PACOTE"
         done
+
 
         echo
 
@@ -483,7 +528,7 @@ verificar_pacotes_etapa() {
     fi
 
 
-    # Se chegamos aqui, todos os pacotes foram encontrados.
+    # Todos os pacotes foram encontrados.
     success "Todos os pacotes necessários estão disponíveis."
 
     return 0
@@ -491,14 +536,15 @@ verificar_pacotes_etapa() {
 
 
 # ============================================================
-# FUNÇÃO: INSTALAR UM PACOTE
+# FUNÇÃO: INSTALAR PACOTE
 # ============================================================
 
-# Instala um pacote somente quando ele ainda não está instalado.
+# Instala um pacote somente se ele ainda não estiver instalado.
 #
-# Isso torna o script idempotente:
+# Isso torna o script idempotente.
 #
-# executar novamente não significa reinstalar tudo.
+# Idempotência significa que podemos executar o script
+# novamente sem precisar reinstalar tudo.
 instalar_pacote() {
 
     local PACOTE="$1"
@@ -511,10 +557,13 @@ instalar_pacote() {
 
     else
 
-        # Caso não esteja instalado, utiliza o APT.
         info "Instalando $PACOTE..."
 
+
+        # -y responde automaticamente "sim" às perguntas
+        # do APT.
         sudo apt-get install -y "$PACOTE"
+
 
         success "$PACOTE instalado."
     fi
@@ -525,14 +574,13 @@ instalar_pacote() {
 # FUNÇÃO: VERIFICAR COMANDO
 # ============================================================
 
-# Verifica se um determinado comando está disponível
-# no PATH do usuário.
+# Verifica se determinado programa está disponível no PATH.
 #
 # Exemplo:
 #
-#     verificar_comando "zsh"
+#     verificar_comando "git"
 #
-# O comando "command -v" procura pelo executável.
+# command -v retorna o caminho do executável se ele existir.
 verificar_comando() {
 
     local COMANDO="$1"
@@ -545,40 +593,50 @@ verificar_comando() {
     else
 
         warning "$COMANDO não foi encontrado."
+
     fi
 }
 
 
 # ============================================================
-# FUNÇÃO: CONFIRMAR EXECUÇÃO DE UMA ETAPA
+# FUNÇÃO: CONFIRMAR ETAPA
 # ============================================================
 
 # Pergunta ao usuário se ele deseja executar determinada etapa.
 #
-# Existe um detalhe importante:
+# Existe um detalhe importante aqui.
 #
-# quando o script é executado assim:
+# Quando executamos:
 #
-#     curl ... | bash
+#     curl URL | bash
 #
-# o stdin do Bash está sendo utilizado pelo conteúdo enviado
-# pelo curl.
+# o stdin do Bash recebe os dados enviados pelo curl.
 #
-# Por isso não podemos simplesmente usar:
+# Portanto, um simples:
 #
-#     read ...
+#     read
 #
-# Precisamos ler diretamente do terminal através de /dev/tty.
+# poderia não funcionar corretamente.
+#
+# Para resolver isso, usamos:
+#
+#     </dev/tty
+#
+# Dessa maneira, a pergunta é lida diretamente do terminal.
 confirmar_etapa() {
 
+    # Número da etapa recebido como argumento.
     local NUMERO="$1"
+
+
+    # Variável onde será armazenada a resposta.
     local RESPOSTA=""
 
 
     echo
 
 
-    # Verifica se existe um terminal disponível.
+    # Verifica se o terminal está disponível.
     if [ ! -r /dev/tty ]; then
 
         warning "Terminal interativo não está disponível."
@@ -587,28 +645,26 @@ confirmar_etapa() {
     fi
 
 
-    # Lê a resposta diretamente do terminal.
+    # Pergunta ao usuário.
     #
     # [S/n] significa:
     #
-    #   Enter -> Sim
-    #   S     -> Sim
-    #   s     -> Sim
-    #   N     -> Não
-    #   n     -> Não
+    # Enter = Sim
+    # S/s   = Sim
+    # N/n   = Não
     read -r -p \
         "Deseja continuar com a Etapa $NUMERO? [S/n]: " \
         RESPOSTA </dev/tty
 
 
-    # Se o usuário apenas apertou Enter,
-    # consideramos que a resposta é SIM.
+    # Se o usuário apertou somente Enter,
+    # assumimos que ele deseja continuar.
     if [ -z "$RESPOSTA" ]; then
         return 0
     fi
 
 
-    # Aceita S ou s como confirmação.
+    # Aceita S ou s.
     if [[ "$RESPOSTA" =~ ^[Ss]$ ]]; then
         return 0
     fi
@@ -625,13 +681,14 @@ confirmar_etapa() {
 
 title "ATUALIZAÇÃO DOS REPOSITÓRIOS"
 
-# Atualiza a lista de pacotes disponíveis.
-#
-# Isso é importante porque o sistema pode estar utilizando
-# informações antigas dos repositórios.
+
+# Antes de instalar os programas, atualizamos a lista
+# de pacotes disponível no sistema.
 info "Atualizando os repositórios APT..."
 
+
 sudo apt-get update
+
 
 success "Repositórios atualizados."
 
@@ -643,10 +700,10 @@ success "Repositórios atualizados."
 title "ETAPA 1 — ZSH E FERRAMENTAS BÁSICAS"
 
 
-# Verifica se a etapa já foi executada anteriormente.
+# Verifica se existe o arquivo marcador da Etapa 1.
 #
-# O arquivo marcador é criado somente depois que todos os
-# procedimentos da etapa forem concluídos.
+# Se existir, significa que a etapa já foi concluída
+# em uma execução anterior.
 if [ -f "$ETAPA1" ]; then
 
     success "Etapa 1 já foi concluída anteriormente."
@@ -654,10 +711,11 @@ if [ -f "$ETAPA1" ]; then
 
 else
 
-    # Solicita confirmação antes de executar a etapa.
+    # Pergunta ao usuário se deseja iniciar a etapa.
     if confirmar_etapa 1; then
 
-        # Verifica se todos os pacotes necessários existem.
+
+        # Verifica todos os pacotes antes de começar.
         if verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"; then
 
 
@@ -667,8 +725,12 @@ else
 
             info "Instalando pacotes da Etapa 1..."
 
+
+            # Percorre todos os pacotes do array.
             for PACOTE in "${PACOTES_ETAPA1[@]}"; do
+
                 instalar_pacote "$PACOTE"
+
             done
 
 
@@ -676,11 +738,7 @@ else
             # INSTALAÇÃO DO OH MY ZSH
             # ------------------------------------------------
 
-            # O Oh My Zsh é instalado dentro do diretório
-            # ~/.oh-my-zsh.
-            #
-            # Se o diretório já existir, não fazemos
-            # novamente o download.
+            # Verifica se o diretório do Oh My Zsh já existe.
             if [ -d "$HOME_USUARIO/.oh-my-zsh" ]; then
 
                 success "Oh My Zsh já está instalado."
@@ -690,35 +748,33 @@ else
                 info "Instalando Oh My Zsh..."
 
 
-                # RUNZSH=no
+                # O instalador oficial do Oh My Zsh é baixado
+                # através do curl.
                 #
-                # Impede que o instalador abra automaticamente
-                # uma nova sessão do Zsh.
+                # RUNZSH=no:
+                # não inicia o Zsh automaticamente.
                 #
-                # CHSH=no
+                # CHSH=no:
+                # não altera o shell padrão automaticamente.
                 #
-                # Impede que o instalador altere o shell padrão.
-                #
-                # Nós mesmos fazemos essa configuração depois,
-                # de maneira controlada.
+                # Nós configuramos isso manualmente logo depois.
                 RUNZSH=no CHSH=no sh -c \
                     "$(curl -fsSL \
                     https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 
                 success "Oh My Zsh instalado."
+
             fi
 
 
             # ------------------------------------------------
-            # CONFIGURAÇÃO DO ZSH
+            # GARANTIR QUE O .zshrc EXISTE
             # ------------------------------------------------
 
-            # O arquivo ~/.zshrc pode não existir em algumas
-            # situações.
+            # touch cria o arquivo caso ele ainda não exista.
             #
-            # O comando abaixo cria o arquivo vazio caso seja
-            # necessário.
+            # Se ele já existir, seu conteúdo permanece intacto.
             touch "$ZSHRC"
 
 
@@ -726,10 +782,9 @@ else
             # BACKUP DO .zshrc
             # ------------------------------------------------
 
-            # Antes de modificar o arquivo, criamos um backup.
+            # Antes de alterar o arquivo, criamos uma cópia.
             #
-            # Isso permite recuperar a configuração original
-            # caso seja necessário.
+            # O backup só é criado uma vez.
             if [ ! -f "$HOME_USUARIO/.zshrc.etapa1.backup" ]; then
 
                 cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa1.backup"
@@ -739,6 +794,7 @@ else
             else
 
                 success "Backup do .zshrc já existe."
+
             fi
 
 
@@ -746,19 +802,19 @@ else
             # CONFIGURAÇÃO DO TEMA AGNOSTER
             # ------------------------------------------------
 
-            # Verifica se já existe uma configuração ZSH_THEME.
+            # Verifica se já existe uma linha ZSH_THEME.
             if grep -q '^ZSH_THEME=' "$ZSHRC"; then
 
-                # Substitui o tema atual pelo Agnoster.
+                # Substitui o tema existente.
                 sed -i \
                     's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' \
                     "$ZSHRC"
 
             else
 
-                # Caso não exista configuração de tema,
-                # adicionamos uma nova.
+                # Caso não exista, adicionamos a configuração.
                 echo 'ZSH_THEME="agnoster"' >> "$ZSHRC"
+
             fi
 
 
@@ -778,7 +834,7 @@ else
             CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
 
 
-            # Só executamos chsh caso ainda não seja Zsh.
+            # Verifica se o Zsh já é o shell padrão.
             if [ "$CURRENT_SHELL" = "$ZSH_PATH" ]; then
 
                 success "Zsh já é o shell padrão."
@@ -787,14 +843,18 @@ else
 
                 info "Definindo Zsh como shell padrão..."
 
+
+                # Altera o shell padrão do usuário.
                 chsh -s "$ZSH_PATH"
 
+
                 success "Zsh definido como shell padrão."
+
             fi
 
 
             # ------------------------------------------------
-            # VERIFICAÇÃO FINAL DA ETAPA 1
+            # VERIFICAÇÃO DOS PROGRAMAS
             # ------------------------------------------------
 
             verificar_comando "zsh"
@@ -807,12 +867,10 @@ else
             # MARCADOR DA ETAPA 1
             # ------------------------------------------------
 
-            # Só criamos o marcador depois que a etapa inteira
-            # chegou ao final.
-            #
-            # Assim, se houver um erro durante a instalação,
-            # a etapa não será considerada concluída.
+            # O marcador só é criado depois que todos os
+            # procedimentos da etapa terminaram.
             touch "$ETAPA1"
+
 
             success "Etapa 1 concluída."
 
@@ -834,7 +892,7 @@ fi
 title "ETAPA 2 — PROGRAMAS E PERSONALIZAÇÃO"
 
 
-# Verifica se a etapa já foi executada.
+# Verifica se a etapa já foi concluída.
 if [ -f "$ETAPA2" ]; then
 
     success "Etapa 2 já foi concluída anteriormente."
@@ -845,7 +903,8 @@ else
     # Solicita confirmação.
     if confirmar_etapa 2; then
 
-        # Verifica os pacotes antes da instalação.
+
+        # Verifica se todos os pacotes necessários existem.
         if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
 
 
@@ -855,8 +914,11 @@ else
 
             info "Instalando pacotes da Etapa 2..."
 
+
             for PACOTE in "${PACOTES_ETAPA2[@]}"; do
+
                 instalar_pacote "$PACOTE"
+
             done
 
 
@@ -864,20 +926,19 @@ else
             # FIGLET FONTS
             # ------------------------------------------------
 
-            # Diretório onde os estilos adicionais do Figlet
-            # serão armazenados.
+            # Define onde o repositório de fontes será colocado.
             FIGLET_FONTS="$HOME_USUARIO/figlet-fonts"
 
 
-            # Se o repositório Git já existe, não fazemos
-            # novamente o clone.
+            # Se já for um repositório Git, não precisamos
+            # baixar novamente.
             if [ -d "$FIGLET_FONTS/.git" ]; then
 
                 success "Figlet Fonts já está instalado."
 
 
-            # Caso o diretório exista mas não seja um
-            # repositório Git, não sobrescrevemos o conteúdo.
+            # Se o diretório existe, mas não é Git,
+            # não sobrescrevemos seu conteúdo.
             elif [ -d "$FIGLET_FONTS" ]; then
 
                 warning "$FIGLET_FONTS já existe, mas não é um repositório Git."
@@ -888,44 +949,41 @@ else
                 info "Baixando Figlet Fonts..."
 
 
-                # Clona o repositório diretamente para o
-                # diretório escolhido.
+                # Clona o repositório de fontes.
                 git clone \
                     https://github.com/xero/figlet-fonts.git \
                     "$FIGLET_FONTS"
 
 
                 success "Figlet Fonts instalado."
+
             fi
 
 
             # ------------------------------------------------
-            # CONFIGURAÇÃO DO FIGLET
+            # CONFIGURAÇÃO DO FIGLET NO ZSH
             # ------------------------------------------------
 
             # Comando que será colocado no ~/.zshrc.
             #
-            # O Figlet escreve "OHMYZSH!" usando a fonte 3d.
+            # O Figlet usa a fonte "3d".
             #
-            # O resultado é enviado para o lolcat, que adiciona
-            # as cores ao texto.
+            # Depois o texto é enviado para o lolcat.
             FIGLET_COMMAND='figlet "OHMYZSH!" -f "3d" -d "$HOME/figlet-fonts/" | lolcat'
 
 
-            # Verifica se o comando já existe no ~/.zshrc.
-            #
-            # Isso evita adicionar a mesma linha várias vezes
-            # quando o script for executado novamente.
+            # Verifica se a configuração já existe.
             if grep -Fqx "$FIGLET_COMMAND" "$ZSHRC"; then
 
                 success "Mensagem OHMYZSH já está configurada."
 
             else
 
-                # Adiciona o comando ao final do ~/.zshrc.
+                # Adiciona a configuração ao final do arquivo.
                 printf '\n%s\n' "$FIGLET_COMMAND" >> "$ZSHRC"
 
                 success "Mensagem OHMYZSH adicionada ao .zshrc."
+
             fi
 
 
@@ -933,20 +991,19 @@ else
             # CONFIGURAÇÃO DO SNAPD
             # ------------------------------------------------
 
-            # Habilita e inicia o socket do Snap.
+            # Habilita o socket do Snap e o inicia imediatamente.
             #
-            # "enable" faz o serviço iniciar automaticamente
-            # com o sistema.
+            # "enable" faz o serviço iniciar junto com o sistema.
             #
-            # "--now" também inicia imediatamente.
+            # "--now" faz o serviço iniciar agora.
             #
-            # O "|| true" impede que um problema nesse comando
+            # "|| true" impede que uma falha nesse comando
             # encerre todo o script.
             sudo systemctl enable --now snapd.socket 2>/dev/null || true
 
 
-            # Dá alguns segundos para o serviço do Snap
-            # terminar de inicializar.
+            # Aguarda alguns segundos para o Snap terminar
+            # sua inicialização.
             sleep 3
 
 
@@ -954,11 +1011,11 @@ else
             # COOL RETRO TERM
             # ------------------------------------------------
 
-            # Primeiro verificamos se o comando snap existe.
+            # Verifica se o comando snap existe.
             if command -v snap >/dev/null 2>&1; then
 
 
-                # Verifica se o pacote já está instalado.
+                # Verifica se o Cool Retro Term já está instalado.
                 if snap list cool-retro-term >/dev/null 2>&1; then
 
                     success "Cool Retro Term já está instalado."
@@ -968,17 +1025,20 @@ else
                     info "Instalando Cool Retro Term..."
 
 
-                    # Instala o pacote através do Snap.
+                    # Instala o pacote pelo Snap.
                     sudo snap install cool-retro-term --classic
 
 
                     success "Cool Retro Term instalado."
+
                 fi
 
 
             else
 
+                # O Snap não está disponível.
                 warning "Cool Retro Term não será instalado porque o Snap não está disponível."
+
             fi
 
 
@@ -1000,22 +1060,24 @@ else
                     info "Instalando Mari0..."
 
 
-                    # Instala Mari0 utilizando Snap.
+                    # Instala Mari0 através do Snap.
                     sudo snap install mari0
 
 
                     success "Mari0 instalado."
+
                 fi
 
 
             else
 
                 warning "Mari0 não será instalado porque o Snap não está disponível."
+
             fi
 
 
             # ------------------------------------------------
-            # VERIFICAÇÃO FINAL DA ETAPA 2
+            # VERIFICAÇÃO FINAL
             # ------------------------------------------------
 
             verificar_comando "emacs"
@@ -1028,7 +1090,9 @@ else
             # MARCADOR DA ETAPA 2
             # ------------------------------------------------
 
+            # Marca a etapa como concluída.
             touch "$ETAPA2"
+
 
             success "Etapa 2 concluída."
 
@@ -1061,7 +1125,8 @@ else
     # Solicita confirmação.
     if confirmar_etapa 3; then
 
-        # Verifica se todos os pacotes estão disponíveis.
+
+        # Verifica os pacotes necessários.
         if verificar_pacotes_etapa "${PACOTES_ETAPA3[@]}"; then
 
 
@@ -1071,8 +1136,11 @@ else
 
             info "Instalando pacotes da Etapa 3..."
 
+
             for PACOTE in "${PACOTES_ETAPA3[@]}"; do
+
                 instalar_pacote "$PACOTE"
+
             done
 
 
@@ -1080,8 +1148,8 @@ else
             # BACKUP DO .zshrc
             # ------------------------------------------------
 
-            # Como a Etapa 3 também altera o ~/.zshrc,
-            # fazemos outro backup específico.
+            # Como a Etapa 3 também modifica o ~/.zshrc,
+            # fazemos outro backup.
             if [ ! -f "$HOME_USUARIO/.zshrc.etapa3.backup" ]; then
 
                 cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa3.backup"
@@ -1091,6 +1159,7 @@ else
             else
 
                 success "Backup do .zshrc da Etapa 3 já existe."
+
             fi
 
 
@@ -1098,15 +1167,15 @@ else
             # CONFIGURAÇÃO DO BAT
             # ------------------------------------------------
 
-            # Em sistemas Debian/Ubuntu, o executável do pacote
-            # "bat" normalmente é chamado de "batcat".
+            # No Debian e em várias distribuições derivadas,
+            # o executável do pacote "bat" é chamado de
+            # "batcat".
             #
-            # Para que o usuário possa utilizar simplesmente:
+            # O alias permite utilizar:
             #
             #     cat arquivo.txt
             #
-            # configuramos um alias que redireciona "cat" para
-            # o "batcat".
+            # e fazer o sistema utilizar o batcat.
             if grep -Fqx 'alias cat="batcat"' "$ZSHRC"; then
 
                 success 'Alias cat="batcat" já está configurado.'
@@ -1116,11 +1185,12 @@ else
                 echo 'alias cat="batcat"' >> "$ZSHRC"
 
                 success 'Alias cat="batcat" adicionado ao .zshrc.'
+
             fi
 
 
             # ------------------------------------------------
-            # VERIFICAÇÃO FINAL DA ETAPA 3
+            # VERIFICAÇÃO FINAL
             # ------------------------------------------------
 
             verificar_comando "jq"
@@ -1132,8 +1202,9 @@ else
             # MARCADOR DA ETAPA 3
             # ------------------------------------------------
 
-            # Indica que toda a Etapa 3 foi concluída.
+            # Marca a etapa como concluída.
             touch "$ETAPA3"
+
 
             success "Etapa 3 concluída."
 
@@ -1155,37 +1226,47 @@ fi
 title "INSTALAÇÃO FINALIZADA"
 
 
-# Mensagem final indicando que o script chegou ao final.
+# Informa que todas as etapas foram processadas.
 success "Todas as etapas foram processadas."
 
 
-# Explica ao usuário que as alterações do ~/.zshrc não são
-# aplicadas automaticamente à sessão atual.
+# ============================================================
+# INFORMAÇÕES FINAIS
+# ============================================================
+
+# O ~/.zshrc foi alterado durante a execução.
 #
-# Isso acontece porque o shell atual foi iniciado antes das
+# Porém, a sessão atual do terminal foi iniciada antes dessas
 # alterações.
+#
+# Por isso, precisamos recarregar o arquivo manualmente.
 echo
 info "Para aplicar as alterações do Zsh na sessão atual, execute:"
 echo
-echo "  source ~/.zshrc"
+echo "    source ~/.zshrc"
 echo
 
 
-# Mostra onde o log foi salvo.
+# Mostra o caminho do log.
 info "O log desta execução está em:"
 echo
-echo "  $LOG_FILE"
+echo "    $LOG_FILE"
 echo
 
 
 # Mostra os arquivos utilizados para controlar as etapas.
 info "Marcadores das etapas:"
 echo
-echo "  $ETAPA1"
-echo "  $ETAPA2"
-echo "  $ETAPA3"
+echo "    $ETAPA1"
+echo "    $ETAPA2"
+echo "    $ETAPA3"
 echo
 
 
-success "Script concluído."
-```
+# Mensagem final.
+success "Script concluído com sucesso."
+
+
+# Código de saída 0 significa que o script terminou
+# normalmente.
+exit 0
