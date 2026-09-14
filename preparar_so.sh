@@ -429,25 +429,48 @@ pacote_instalado() {
 pacote_disponivel() {
 
     local PACOTE="$1"
+    local CANDIDATO
 
 
-    # Se o pacote já estiver instalado, ele está disponível.
+    # ------------------------------------------------
+    # VERIFICA SE O PACOTE JÁ ESTÁ INSTALADO
+    # ------------------------------------------------
+
     if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
 
         return 0
+
     fi
 
 
-    # apt-cache show consulta as informações disponíveis
-    # nos repositórios configurados.
-    if apt-cache show "$PACOTE" >/dev/null 2>&1; then
+    # ------------------------------------------------
+    # VERIFICA O CANDIDATO DISPONÍVEL NO APT
+    # ------------------------------------------------
+
+    # "apt-cache show" não é suficiente para essa
+    # verificação, pois pode encontrar informações
+    # sobre um pacote mesmo quando o APT não possui
+    # uma versão instalável.
+    #
+    # Por isso verificamos especificamente o campo
+    # "Candidate:" do apt-cache policy.
+
+    CANDIDATO="$(
+        apt-cache policy "$PACOTE" 2>/dev/null \
+            | awk -F': ' '/Candidate:/ {print $2; exit}'
+    )"
+
+
+    # Se existe um candidato válido, o pacote pode
+    # ser instalado pelo APT.
+    if [ -n "$CANDIDATO" ] && [ "$CANDIDATO" != "(none)" ]; then
 
         return 0
+
     fi
 
 
-    # Pacote não encontrado.
     return 1
 }
 
@@ -903,12 +926,81 @@ if [ -f "$ETAPA2" ]; then
 
 else
 
-    # Solicita confirmação.
-    if confirmar_etapa 2; then
+# Solicita confirmação.
+if confirmar_etapa 2; then
 
 
-        # Verifica se todos os pacotes necessários existem.
-        if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
+    # ------------------------------------------------
+    # PREPARAÇÃO DO SNAPD NO LINUX MINT
+    # ------------------------------------------------
+
+    # O Linux Mint bloqueia a instalação do Snap
+    # através do arquivo "nosnap.pref".
+    #
+    # Essa configuração é específica do Linux Mint.
+    # Não devemos removê-la em Ubuntu, Debian ou
+    # outras distribuições.
+
+    if [ "${ID:-}" = "linuxmint" ]; then
+
+        NOSNAP_PREF="/etc/apt/preferences.d/nosnap.pref"
+
+
+        # Verifica se o bloqueio do Snap existe.
+        if [ -f "$NOSNAP_PREF" ]; then
+
+            info "Bloqueio do Snap detectado no Linux Mint."
+
+
+            # ------------------------------------------------
+            # BACKUP DO BLOQUEIO
+            # ------------------------------------------------
+
+            # Fazemos um backup antes de remover o arquivo.
+            if [ ! -f "${NOSNAP_PREF}.backup" ]; then
+
+                sudo cp "$NOSNAP_PREF" "${NOSNAP_PREF}.backup"
+
+                success "Backup do bloqueio do Snap criado."
+
+            else
+
+                success "Backup do bloqueio do Snap já existe."
+
+            fi
+
+
+            # ------------------------------------------------
+            # REMOÇÃO DO BLOQUEIO
+            # ------------------------------------------------
+
+            sudo rm "$NOSNAP_PREF"
+
+            success "Bloqueio do Snap removido."
+
+
+            # ------------------------------------------------
+            # ATUALIZAÇÃO DOS REPOSITÓRIOS
+            # ------------------------------------------------
+
+            info "Atualizando os repositórios após liberar o Snap..."
+
+            sudo apt-get update
+
+            success "Repositórios atualizados."
+
+        fi
+
+    fi
+
+
+    # ------------------------------------------------
+    # VERIFICAÇÃO DOS PACOTES
+    # ------------------------------------------------
+
+    # Agora o APT já está preparado para verificar
+    # corretamente a disponibilidade do snapd.
+    if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
 
 
             # ------------------------------------------------
