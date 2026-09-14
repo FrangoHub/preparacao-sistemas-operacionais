@@ -541,38 +541,55 @@ verificar_pacotes_etapa() {
 
 # Instala um pacote somente se ele ainda não estiver instalado.
 #
-# Isso torna o script idempotente.
-#
-# Idempotência significa que podemos executar o script
-# novamente sem precisar reinstalar tudo.
+# A instalação é feita em modo não interativo para impedir que
+# o APT/DPKG abra telas de configuração durante a execução
+# automática do script.
 instalar_pacote() {
+
+    # Primeiro argumento recebido pela função.
     local PACOTE="$1"
+
 
     # Verifica se o pacote já está instalado.
     if pacote_instalado "$PACOTE"; then
 
         success "$PACOTE já está instalado."
 
+        return 0
+
+    fi
+
+
+    # Informa qual pacote está sendo instalado.
+    info "Instalando $PACOTE..."
+
+
+    # O "DEBIAN_FRONTEND=noninteractive" precisa ser aplicado
+    # ao ambiente do apt/dpkg.
+    #
+    # Usamos "sudo env" porque o sudo pode remover variáveis
+    # de ambiente antes de executar o comando.
+    #
+    # Dessa forma:
+    #
+    #     sudo
+    #       ↓
+    #     env DEBIAN_FRONTEND=noninteractive
+    #       ↓
+    #     apt-get
+    #
+    # O apt-get realmente recebe a configuração.
+    if sudo env DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y "$PACOTE"; then
+
+        success "$PACOTE instalado."
+
     else
 
-        info "Instalando $PACOTE..."
+        error "Falha ao instalar o pacote $PACOTE."
 
-        # Instala o pacote sem abrir telas interativas do
-        # sistema de configuração de pacotes.
-        #
-        # DEBIAN_FRONTEND=noninteractive evita que o apt/dpkg
-        # abra menus de configuração durante a execução.
-        if DEBIAN_FRONTEND=noninteractive \
-            sudo apt-get install -y "$PACOTE"; then
+        return 1
 
-            success "$PACOTE instalado."
-
-        else
-
-            error "Falha ao instalar o pacote $PACOTE."
-            return 1
-
-        fi
     fi
 }
 
