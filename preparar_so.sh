@@ -535,15 +535,15 @@ verificar_pacotes_etapa() {
 }
 
 
+
 # ============================================================
 # FUNÇÃO: INSTALAR PACOTE
 # ============================================================
 
 # Instala um pacote somente se ele ainda não estiver instalado.
 #
-# A instalação é feita em modo não interativo para impedir que
-# o APT/DPKG abra telas de configuração durante a execução
-# automática do script.
+# O DEBIAN_FRONTEND=noninteractive impede que o APT/DPKG
+# abra telas interativas de configuração durante a instalação.
 instalar_pacote() {
 
     # Primeiro argumento recebido pela função.
@@ -560,26 +560,15 @@ instalar_pacote() {
     fi
 
 
-    # Informa qual pacote está sendo instalado.
+    # Mostra qual pacote está sendo instalado.
     info "Instalando $PACOTE..."
 
 
-    # O "DEBIAN_FRONTEND=noninteractive" precisa ser aplicado
-    # ao ambiente do apt/dpkg.
+    # O DEBIAN_FRONTEND é colocado depois do sudo.
     #
-    # Usamos "sudo env" porque o sudo pode remover variáveis
-    # de ambiente antes de executar o comando.
-    #
-    # Dessa forma:
-    #
-    #     sudo
-    #       ↓
-    #     env DEBIAN_FRONTEND=noninteractive
-    #       ↓
-    #     apt-get
-    #
-    # O apt-get realmente recebe a configuração.
-    if sudo env DEBIAN_FRONTEND=noninteractive \
+    # Dessa forma, a variável é aplicada ao comando que o sudo
+    # realmente executará.
+    if sudo DEBIAN_FRONTEND=noninteractive \
         apt-get install -y "$PACOTE"; then
 
         success "$PACOTE instalado."
