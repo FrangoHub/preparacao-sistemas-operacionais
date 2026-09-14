@@ -546,9 +546,7 @@ verificar_pacotes_etapa() {
 # Idempotência significa que podemos executar o script
 # novamente sem precisar reinstalar tudo.
 instalar_pacote() {
-
     local PACOTE="$1"
-
 
     # Verifica se o pacote já está instalado.
     if pacote_instalado "$PACOTE"; then
@@ -559,13 +557,22 @@ instalar_pacote() {
 
         info "Instalando $PACOTE..."
 
+        # Instala o pacote sem abrir telas interativas do
+        # sistema de configuração de pacotes.
+        #
+        # DEBIAN_FRONTEND=noninteractive evita que o apt/dpkg
+        # abra menus de configuração durante a execução.
+        if DEBIAN_FRONTEND=noninteractive \
+            sudo apt-get install -y "$PACOTE"; then
 
-        # -y responde automaticamente "sim" às perguntas
-        # do APT.
-        sudo apt-get install -y "$PACOTE"
+            success "$PACOTE instalado."
 
+        else
 
-        success "$PACOTE instalado."
+            error "Falha ao instalar o pacote $PACOTE."
+            return 1
+
+        fi
     fi
 }
 
