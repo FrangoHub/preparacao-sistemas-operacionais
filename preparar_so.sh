@@ -835,21 +835,11 @@ else
 
 
             # Verifica se o Zsh já é o shell padrão.
-            if [ "$CURRENT_SHELL" = "$ZSH_PATH" ]; then
-
-                success "Zsh já é o shell padrão."
-
-            else
-
-                info "Definindo Zsh como shell padrão..."
-
-
-                # Altera o shell padrão do usuário.
-                chsh -s "$ZSH_PATH"
-
-
+            if sudo chsh -s "$ZSH_PATH" "$USER"; then
                 success "Zsh definido como shell padrão."
-
+            else
+                warning "Não foi possível alterar o shell padrão automaticamente."
+                warning "O Zsh foi instalado, mas será necessário configurá-lo manualmente."
             fi
 
 
