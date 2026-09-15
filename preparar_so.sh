@@ -280,9 +280,12 @@ PACOTES_ETAPA3=(
 # FUNÇÃO: PACOTE INSTALADO
 # ============================================================
 
+# Verifica se um pacote está realmente instalado no sistema.
+
 pacote_instalado() {
 
     local PACOTE="$1"
+
 
     if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
@@ -291,47 +294,8 @@ pacote_instalado() {
 
     fi
 
+
     return 1
-}
-
-
-# ============================================================
-# FUNÇÃO: TODOS OS PACOTES INSTALADOS
-# ============================================================
-
-# Verifica se todos os pacotes de uma determinada etapa
-# continuam instalados.
-#
-# Essa função é importante porque o marcador da etapa não
-# significa que os programas nunca foram removidos.
-#
-# Exemplo:
-#
-#   A Etapa 3 foi concluída.
-#   Depois o usuário removeu o jq.
-#
-# O marcador continua existindo, mas esta função detectará
-# que o jq está faltando e permitirá executar novamente
-# a etapa.
-
-todos_pacotes_instalados() {
-
-    local PACOTES=("$@")
-    local PACOTE
-
-
-    for PACOTE in "${PACOTES[@]}"; do
-
-        if ! pacote_instalado "$PACOTE"; then
-
-            return 1
-
-        fi
-
-    done
-
-
-    return 0
 }
 
 
@@ -345,9 +309,8 @@ todos_pacotes_instalados() {
 # ou
 #   - possui um candidato disponível no APT.
 #
-# Usamos "apt-cache policy" em vez de "apt-cache show"
-# porque "apt-cache show" pode encontrar informações de um
-# pacote mesmo quando não existe uma versão instalável.
+# Essa função é utilizada antes da instalação para evitar
+# tentar instalar pacotes que não existem nos repositórios.
 
 pacote_disponivel() {
 
@@ -394,6 +357,9 @@ pacote_disponivel() {
 # ============================================================
 # FUNÇÃO: VERIFICAR PACOTES DA ETAPA
 # ============================================================
+
+# Verifica se todos os pacotes necessários estão disponíveis
+# nos repositórios configurados no sistema.
 
 verificar_pacotes_etapa() {
 
@@ -461,13 +427,24 @@ verificar_pacotes_etapa() {
 # FUNÇÃO: INSTALAR PACOTE
 # ============================================================
 
+# Essa função é responsável pela parte principal da lógica
+# de reinstalação.
+#
+# Toda vez que o script for executado:
+#
+#   - Se o pacote existir -> não faz nada.
+#   - Se o pacote estiver faltando -> instala novamente.
+#
+# Portanto, os marcadores das etapas NÃO impedem a recuperação
+# de pacotes removidos.
+
 instalar_pacote() {
 
     local PACOTE="$1"
 
 
     # ------------------------------------------------
-    # VERIFICA SE JÁ ESTÁ INSTALADO
+    # PACOTE JÁ INSTALADO
     # ------------------------------------------------
 
     if pacote_instalado "$PACOTE"; then
@@ -480,15 +457,15 @@ instalar_pacote() {
 
 
     # ------------------------------------------------
-    # INSTALAÇÃO
+    # PACOTE AUSENTE
     # ------------------------------------------------
+
+    info "$PACOTE não está instalado."
 
     info "Instalando $PACOTE..."
 
 
     # Cada pacote utiliza sua própria chamada ao sudo.
-    # Isso permite que o script reinstale somente os pacotes
-    # que estiverem faltando.
 
     if sudo DEBIAN_FRONTEND=noninteractive \
         apt-get install -y "$PACOTE"; then
@@ -525,8 +502,6 @@ instalar_pacote() {
 # ============================================================
 
 # Verifica se determinado programa está disponível no PATH.
-#
-# Além de verificar a existência, mostra o caminho encontrado.
 
 verificar_comando() {
 
@@ -557,6 +532,16 @@ verificar_comando() {
 # FUNÇÃO: CONFIRMAR ETAPA
 # ============================================================
 
+# Solicita confirmação antes de executar cada etapa.
+#
+# /dev/tty é utilizado porque o script também pode ser
+# executado através de:
+#
+# curl ... | bash
+#
+# Nesse caso, a entrada padrão do Bash está sendo utilizada
+# pelo conteúdo baixado do curl.
+
 confirmar_etapa() {
 
     local NUMERO="$1"
@@ -579,6 +564,8 @@ confirmar_etapa() {
         "Deseja continuar com a Etapa $NUMERO? [S/n]: " \
         RESPOSTA </dev/tty
 
+
+    # Enter vazio = Sim.
 
     if [ -z "$RESPOSTA" ]; then
 
@@ -618,177 +605,177 @@ success "Repositórios atualizados."
 title "ETAPA 1 — ZSH E FERRAMENTAS BÁSICAS"
 
 
-# A etapa só será ignorada se:
-#
-#   1. O marcador existir
-#   2. Todos os pacotes continuarem instalados
+# ------------------------------------------------------------
+# MARCADOR DA ETAPA
+# ------------------------------------------------------------
 
-if [ -f "$ETAPA1" ] && todos_pacotes_instalados "${PACOTES_ETAPA1[@]}"; then
+if [ -f "$ETAPA1" ]; then
 
-    success "Etapa 1 já foi concluída e todos os pacotes continuam instalados."
-    info "Pulando Etapa 1."
+    success "A Etapa 1 já foi executada anteriormente."
 
 else
 
-    if [ -f "$ETAPA1" ]; then
+    info "A Etapa 1 ainda não foi executada."
 
-        warning "A Etapa 1 já possuía um marcador, mas algum componente está faltando."
-
-    fi
+fi
 
 
-    if confirmar_etapa 1; then
+# ------------------------------------------------------------
+# CONFIRMAÇÃO
+# ------------------------------------------------------------
+
+if confirmar_etapa 1; then
+
+
+    # ------------------------------------------------
+    # VERIFICAÇÃO DOS PACOTES
+    # ------------------------------------------------
+
+    if verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"; then
+
 
         # ------------------------------------------------
-        # VERIFICAÇÃO DOS PACOTES
+        # INSTALAÇÃO INDIVIDUAL DOS PACOTES
         # ------------------------------------------------
 
-        if verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"; then
+        info "Verificando os componentes da Etapa 1..."
 
 
-            # ------------------------------------------------
-            # INSTALAÇÃO DOS PACOTES
-            # ------------------------------------------------
+        for PACOTE in "${PACOTES_ETAPA1[@]}"; do
 
-            info "Verificando e instalando pacotes da Etapa 1..."
+            instalar_pacote "$PACOTE"
 
+        done
 
-            for PACOTE in "${PACOTES_ETAPA1[@]}"; do
 
-                instalar_pacote "$PACOTE"
+        # ------------------------------------------------
+        # INSTALAÇÃO DO OH MY ZSH
+        # ------------------------------------------------
 
-            done
+        if [ -d "$HOME_USUARIO/.oh-my-zsh" ]; then
 
+            success "Oh My Zsh já está instalado."
 
-            # ------------------------------------------------
-            # INSTALAÇÃO DO OH MY ZSH
-            # ------------------------------------------------
+        else
 
-            if [ -d "$HOME_USUARIO/.oh-my-zsh" ]; then
+            info "Oh My Zsh não foi encontrado."
 
-                success "Oh My Zsh já está instalado."
+            info "Instalando Oh My Zsh..."
 
-            else
 
-                info "Instalando Oh My Zsh..."
+            RUNZSH=no CHSH=no sh -c \
+                "$(curl -fsSL \
+                https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 
-                RUNZSH=no CHSH=no sh -c \
-                    "$(curl -fsSL \
-                    https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-
-
-                success "Oh My Zsh instalado."
-
-            fi
-
-
-            # ------------------------------------------------
-            # GARANTIR QUE O .zshrc EXISTE
-            # ------------------------------------------------
-
-            touch "$ZSHRC"
-
-
-            # ------------------------------------------------
-            # BACKUP DO .zshrc
-            # ------------------------------------------------
-
-            if [ ! -f "$HOME_USUARIO/.zshrc.etapa1.backup" ]; then
-
-                cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa1.backup"
-
-                success "Backup do .zshrc criado."
-
-            else
-
-                success "Backup do .zshrc já existe."
-
-            fi
-
-
-            # ------------------------------------------------
-            # CONFIGURAÇÃO DO TEMA AGNOSTER
-            # ------------------------------------------------
-
-            if grep -q '^ZSH_THEME=' "$ZSHRC"; then
-
-                sed -i \
-                    's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' \
-                    "$ZSHRC"
-
-            else
-
-                echo 'ZSH_THEME="agnoster"' >> "$ZSHRC"
-
-            fi
-
-
-            success "Tema Agnoster configurado."
-
-
-            # ------------------------------------------------
-            # DEFINIR ZSH COMO SHELL PADRÃO
-            # ------------------------------------------------
-
-            ZSH_PATH="$(command -v zsh)"
-
-
-            if [ -z "$ZSH_PATH" ]; then
-
-                error "O executável do Zsh não foi encontrado."
-
-                exit 1
-
-            fi
-
-
-            CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
-
-
-            if [ "$CURRENT_SHELL" = "$ZSH_PATH" ]; then
-
-                success "Zsh já está configurado como shell padrão."
-
-            elif sudo chsh -s "$ZSH_PATH" "$USER"; then
-
-                success "Zsh definido como shell padrão."
-
-            else
-
-                warning "Não foi possível alterar o shell padrão automaticamente."
-                warning "O Zsh foi instalado, mas será necessário configurá-lo manualmente."
-
-            fi
-
-
-            # ------------------------------------------------
-            # VERIFICAÇÃO DOS PROGRAMAS
-            # ------------------------------------------------
-
-            hash -r
-
-            verificar_comando "zsh"
-            verificar_comando "curl"
-            verificar_comando "git"
-            verificar_comando "nano"
-
-
-            # ------------------------------------------------
-            # MARCADOR DA ETAPA 1
-            # ------------------------------------------------
-
-            touch "$ETAPA1"
-
-            success "Etapa 1 concluída."
+            success "Oh My Zsh instalado."
 
         fi
 
-    else
 
-        warning "Etapa 1 cancelada pelo usuário."
+        # ------------------------------------------------
+        # GARANTIR QUE O .zshrc EXISTE
+        # ------------------------------------------------
+
+        touch "$ZSHRC"
+
+
+        # ------------------------------------------------
+        # BACKUP DO .zshrc
+        # ------------------------------------------------
+
+        if [ ! -f "$HOME_USUARIO/.zshrc.etapa1.backup" ]; then
+
+            cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa1.backup"
+
+            success "Backup do .zshrc criado."
+
+        else
+
+            success "Backup do .zshrc já existe."
+
+        fi
+
+
+        # ------------------------------------------------
+        # CONFIGURAÇÃO DO TEMA AGNOSTER
+        # ------------------------------------------------
+
+        if grep -q '^ZSH_THEME=' "$ZSHRC"; then
+
+            sed -i \
+                's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' \
+                "$ZSHRC"
+
+        else
+
+            echo 'ZSH_THEME="agnoster"' >> "$ZSHRC"
+
+        fi
+
+
+        success "Tema Agnoster configurado."
+
+
+        # ------------------------------------------------
+        # DEFINIR ZSH COMO SHELL PADRÃO
+        # ------------------------------------------------
+
+        ZSH_PATH="$(command -v zsh)"
+
+
+        if [ -z "$ZSH_PATH" ]; then
+
+            error "O executável do Zsh não foi encontrado."
+
+            exit 1
+
+        fi
+
+
+        CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+
+
+        if [ "$CURRENT_SHELL" = "$ZSH_PATH" ]; then
+
+            success "Zsh já está configurado como shell padrão."
+
+        elif sudo chsh -s "$ZSH_PATH" "$USER"; then
+
+            success "Zsh definido como shell padrão."
+
+        else
+
+            warning "Não foi possível alterar o shell padrão automaticamente."
+
+        fi
+
+
+        # ------------------------------------------------
+        # VERIFICAÇÃO DOS PROGRAMAS
+        # ------------------------------------------------
+
+        hash -r
+
+        verificar_comando "zsh"
+        verificar_comando "curl"
+        verificar_comando "git"
+        verificar_comando "nano"
+
+
+        # ------------------------------------------------
+        # MARCADOR DA ETAPA
+        # ------------------------------------------------
+
+        touch "$ETAPA1"
+
+        success "Etapa 1 concluída."
 
     fi
+
+else
+
+    warning "Etapa 1 cancelada pelo usuário."
 
 fi
 
@@ -800,260 +787,262 @@ fi
 title "ETAPA 2 — PROGRAMAS E PERSONALIZAÇÃO"
 
 
-# A etapa só será ignorada se:
-#
-#   1. O marcador existir
-#   2. Todos os pacotes continuarem instalados
+# ------------------------------------------------------------
+# MARCADOR DA ETAPA
+# ------------------------------------------------------------
 
-if [ -f "$ETAPA2" ] && todos_pacotes_instalados "${PACOTES_ETAPA2[@]}"; then
+if [ -f "$ETAPA2" ]; then
 
-    success "Etapa 2 já foi concluída e todos os pacotes continuam instalados."
-    info "Pulando Etapa 2."
+    success "A Etapa 2 já foi executada anteriormente."
 
 else
 
-    if [ -f "$ETAPA2" ]; then
+    info "A Etapa 2 ainda não foi executada."
 
-        warning "A Etapa 2 já possuía um marcador, mas algum componente está faltando."
+fi
+
+
+# ------------------------------------------------------------
+# CONFIRMAÇÃO
+# ------------------------------------------------------------
+
+if confirmar_etapa 2; then
+
+
+    # ------------------------------------------------
+    # PREPARAÇÃO DO SNAPD NO LINUX MINT
+    # ------------------------------------------------
+
+    # O Linux Mint bloqueia o Snap através do arquivo:
+    #
+    # /etc/apt/preferences.d/nosnap.pref
+    #
+    # Essa alteração é feita somente no Linux Mint.
+
+    if [ "${ID:-}" = "linuxmint" ]; then
+
+        NOSNAP_PREF="/etc/apt/preferences.d/nosnap.pref"
+
+
+        if [ -f "$NOSNAP_PREF" ]; then
+
+            info "Bloqueio do Snap detectado no Linux Mint."
+
+
+            # ------------------------------------------------
+            # BACKUP DO BLOQUEIO
+            # ------------------------------------------------
+
+            if [ ! -f "${NOSNAP_PREF}.backup" ]; then
+
+                sudo cp "$NOSNAP_PREF" "${NOSNAP_PREF}.backup"
+
+                success "Backup do bloqueio do Snap criado."
+
+            else
+
+                success "Backup do bloqueio do Snap já existe."
+
+            fi
+
+
+            # ------------------------------------------------
+            # REMOÇÃO DO BLOQUEIO
+            # ------------------------------------------------
+
+            sudo rm "$NOSNAP_PREF"
+
+            success "Bloqueio do Snap removido."
+
+
+            # ------------------------------------------------
+            # ATUALIZAÇÃO DOS REPOSITÓRIOS
+            # ------------------------------------------------
+
+            info "Atualizando os repositórios após liberar o Snap..."
+
+            sudo apt-get update
+
+            success "Repositórios atualizados."
+
+        fi
 
     fi
 
 
-    if confirmar_etapa 2; then
+    # ------------------------------------------------
+    # VERIFICAÇÃO DOS PACOTES
+    # ------------------------------------------------
+
+    if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
 
 
         # ------------------------------------------------
-        # PREPARAÇÃO DO SNAPD NO LINUX MINT
+        # INSTALAÇÃO INDIVIDUAL DOS PACOTES
         # ------------------------------------------------
 
-        # O Linux Mint bloqueia o Snap através do arquivo:
-        #
-        # /etc/apt/preferences.d/nosnap.pref
-        #
-        # Essa alteração é feita somente no Linux Mint.
-
-        if [ "${ID:-}" = "linuxmint" ]; then
-
-            NOSNAP_PREF="/etc/apt/preferences.d/nosnap.pref"
+        info "Verificando os componentes da Etapa 2..."
 
 
-            if [ -f "$NOSNAP_PREF" ]; then
+        for PACOTE in "${PACOTES_ETAPA2[@]}"; do
 
-                info "Bloqueio do Snap detectado no Linux Mint."
+            instalar_pacote "$PACOTE"
 
-
-                # ------------------------------------------------
-                # BACKUP DO BLOQUEIO
-                # ------------------------------------------------
-
-                if [ ! -f "${NOSNAP_PREF}.backup" ]; then
-
-                    sudo cp "$NOSNAP_PREF" "${NOSNAP_PREF}.backup"
-
-                    success "Backup do bloqueio do Snap criado."
-
-                else
-
-                    success "Backup do bloqueio do Snap já existe."
-
-                fi
+        done
 
 
-                # ------------------------------------------------
-                # REMOÇÃO DO BLOQUEIO
-                # ------------------------------------------------
+        # ------------------------------------------------
+        # FIGLET FONTS
+        # ------------------------------------------------
 
-                sudo rm "$NOSNAP_PREF"
-
-                success "Bloqueio do Snap removido."
+        FIGLET_FONTS="$HOME_USUARIO/figlet-fonts"
 
 
-                # ------------------------------------------------
-                # ATUALIZAÇÃO DOS REPOSITÓRIOS
-                # ------------------------------------------------
+        if [ -d "$FIGLET_FONTS/.git" ]; then
 
-                info "Atualizando os repositórios após liberar o Snap..."
+            success "Figlet Fonts já está instalado."
 
-                sudo apt-get update
+        elif [ -d "$FIGLET_FONTS" ]; then
 
-                success "Repositórios atualizados."
+            warning "$FIGLET_FONTS já existe, mas não é um repositório Git."
 
-            fi
+        else
+
+            info "Figlet Fonts não foi encontrado."
+
+            info "Baixando Figlet Fonts..."
+
+
+            git clone \
+                https://github.com/xero/figlet-fonts.git \
+                "$FIGLET_FONTS"
+
+
+            success "Figlet Fonts instalado."
 
         fi
 
 
         # ------------------------------------------------
-        # VERIFICAÇÃO DOS PACOTES
+        # CONFIGURAÇÃO DO FIGLET NO ZSH
         # ------------------------------------------------
 
-        if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
+        FIGLET_COMMAND='figlet "OHMYZSH!" -f "3d" -d "$HOME/figlet-fonts/" | lolcat'
 
 
-            # ------------------------------------------------
-            # INSTALAÇÃO DOS PACOTES
-            # ------------------------------------------------
+        if grep -Fqx "$FIGLET_COMMAND" "$ZSHRC"; then
 
-            info "Verificando e instalando pacotes da Etapa 2..."
+            success "Mensagem OHMYZSH já está configurada."
 
+        else
 
-            for PACOTE in "${PACOTES_ETAPA2[@]}"; do
+            printf '\n%s\n' "$FIGLET_COMMAND" >> "$ZSHRC"
 
-                instalar_pacote "$PACOTE"
-
-            done
-
-
-            # ------------------------------------------------
-            # FIGLET FONTS
-            # ------------------------------------------------
-
-            FIGLET_FONTS="$HOME_USUARIO/figlet-fonts"
-
-
-            if [ -d "$FIGLET_FONTS/.git" ]; then
-
-                success "Figlet Fonts já está instalado."
-
-            elif [ -d "$FIGLET_FONTS" ]; then
-
-                warning "$FIGLET_FONTS já existe, mas não é um repositório Git."
-
-            else
-
-                info "Baixando Figlet Fonts..."
-
-
-                git clone \
-                    https://github.com/xero/figlet-fonts.git \
-                    "$FIGLET_FONTS"
-
-
-                success "Figlet Fonts instalado."
-
-            fi
-
-
-            # ------------------------------------------------
-            # CONFIGURAÇÃO DO FIGLET NO ZSH
-            # ------------------------------------------------
-
-            FIGLET_COMMAND='figlet "OHMYZSH!" -f "3d" -d "$HOME/figlet-fonts/" | lolcat'
-
-
-            if grep -Fqx "$FIGLET_COMMAND" "$ZSHRC"; then
-
-                success "Mensagem OHMYZSH já está configurada."
-
-            else
-
-                printf '\n%s\n' "$FIGLET_COMMAND" >> "$ZSHRC"
-
-                success "Mensagem OHMYZSH adicionada ao .zshrc."
-
-            fi
-
-
-            # ------------------------------------------------
-            # CONFIGURAÇÃO DO SNAPD
-            # ------------------------------------------------
-
-            # Habilita o socket do Snap e inicia o serviço.
-
-            sudo systemctl enable --now snapd.socket 2>/dev/null || true
-
-
-            # Aguarda o Snap terminar sua inicialização.
-
-            sleep 3
-
-
-            # ------------------------------------------------
-            # COOL RETRO TERM
-            # ------------------------------------------------
-
-            if command -v snap >/dev/null 2>&1; then
-
-
-                if snap list cool-retro-term >/dev/null 2>&1; then
-
-                    success "Cool Retro Term já está instalado."
-
-                else
-
-                    info "Instalando Cool Retro Term..."
-
-                    sudo snap install cool-retro-term --classic
-
-                    success "Cool Retro Term instalado."
-
-                fi
-
-
-            else
-
-                warning "Cool Retro Term não será instalado porque o Snap não está disponível."
-
-            fi
-
-
-            # ------------------------------------------------
-            # MARI0
-            # ------------------------------------------------
-
-            if command -v snap >/dev/null 2>&1; then
-
-
-                if snap list mari0 >/dev/null 2>&1; then
-
-                    success "Mari0 já está instalado."
-
-                else
-
-                    info "Instalando Mari0..."
-
-                    sudo snap install mari0
-
-                    success "Mari0 instalado."
-
-                fi
-
-
-            else
-
-                warning "Mari0 não será instalado porque o Snap não está disponível."
-
-            fi
-
-
-            # ------------------------------------------------
-            # VERIFICAÇÃO FINAL
-            # ------------------------------------------------
-
-            hash -r
-
-            verificar_comando "emacs"
-            verificar_comando "figlet"
-            verificar_comando "lolcat"
-            verificar_comando "terminator"
-            verificar_comando "snap"
-
-
-            # ------------------------------------------------
-            # MARCADOR DA ETAPA 2
-            # ------------------------------------------------
-
-            touch "$ETAPA2"
-
-            success "Etapa 2 concluída."
+            success "Mensagem OHMYZSH adicionada ao .zshrc."
 
         fi
 
-    else
 
-        warning "Etapa 2 cancelada pelo usuário."
+        # ------------------------------------------------
+        # CONFIGURAÇÃO DO SNAPD
+        # ------------------------------------------------
+
+        sudo systemctl enable --now snapd.socket 2>/dev/null || true
+
+
+        # Aguarda o Snap terminar sua inicialização.
+
+        sleep 3
+
+
+        # ------------------------------------------------
+        # COOL RETRO TERM
+        # ------------------------------------------------
+
+        if command -v snap >/dev/null 2>&1; then
+
+
+            if snap list cool-retro-term >/dev/null 2>&1; then
+
+                success "Cool Retro Term já está instalado."
+
+            else
+
+                info "Cool Retro Term não foi encontrado."
+
+                info "Instalando Cool Retro Term..."
+
+                sudo snap install cool-retro-term --classic
+
+                success "Cool Retro Term instalado."
+
+            fi
+
+
+        else
+
+            warning "Cool Retro Term não será instalado porque o Snap não está disponível."
+
+        fi
+
+
+        # ------------------------------------------------
+        # MARI0
+        # ------------------------------------------------
+
+        if command -v snap >/dev/null 2>&1; then
+
+
+            if snap list mari0 >/dev/null 2>&1; then
+
+                success "Mari0 já está instalado."
+
+            else
+
+                info "Mari0 não foi encontrado."
+
+                info "Instalando Mari0..."
+
+                sudo snap install mari0
+
+                success "Mari0 instalado."
+
+            fi
+
+
+        else
+
+            warning "Mari0 não será instalado porque o Snap não está disponível."
+
+        fi
+
+
+        # ------------------------------------------------
+        # VERIFICAÇÃO FINAL
+        # ------------------------------------------------
+
+        hash -r
+
+        verificar_comando "emacs"
+        verificar_comando "figlet"
+        verificar_comando "lolcat"
+        verificar_comando "terminator"
+        verificar_comando "snap"
+
+
+        # ------------------------------------------------
+        # MARCADOR DA ETAPA
+        # ------------------------------------------------
+
+        touch "$ETAPA2"
+
+        success "Etapa 2 concluída."
 
     fi
+
+else
+
+    warning "Etapa 2 cancelada pelo usuário."
 
 fi
 
@@ -1065,130 +1054,124 @@ fi
 title "ETAPA 3 — UTILITÁRIOS"
 
 
-# A etapa só será ignorada se:
-#
-#   1. O marcador existir
-#   2. Todos os pacotes continuarem instalados
+# ------------------------------------------------------------
+# MARCADOR DA ETAPA
+# ------------------------------------------------------------
 
-if [ -f "$ETAPA3" ] && todos_pacotes_instalados "${PACOTES_ETAPA3[@]}"; then
+if [ -f "$ETAPA3" ]; then
 
-    success "Etapa 3 já foi concluída e todos os pacotes continuam instalados."
-    info "Pulando Etapa 3."
+    success "A Etapa 3 já foi executada anteriormente."
 
 else
 
-    if [ -f "$ETAPA3" ]; then
+    info "A Etapa 3 ainda não foi executada."
 
-        warning "A Etapa 3 já possuía um marcador, mas algum componente está faltando."
-
-    fi
+fi
 
 
-    if confirmar_etapa 3; then
+# ------------------------------------------------------------
+# CONFIRMAÇÃO
+# ------------------------------------------------------------
+
+if confirmar_etapa 3; then
+
+
+    # ------------------------------------------------
+    # VERIFICAÇÃO DOS PACOTES
+    # ------------------------------------------------
+
+    if verificar_pacotes_etapa "${PACOTES_ETAPA3[@]}"; then
 
 
         # ------------------------------------------------
-        # VERIFICAÇÃO DOS PACOTES
+        # INSTALAÇÃO INDIVIDUAL DOS PACOTES
         # ------------------------------------------------
 
-        if verificar_pacotes_etapa "${PACOTES_ETAPA3[@]}"; then
+        info "Verificando os componentes da Etapa 3..."
 
 
-            # ------------------------------------------------
-            # INSTALAÇÃO DOS PACOTES
-            # ------------------------------------------------
+        for PACOTE in "${PACOTES_ETAPA3[@]}"; do
 
-            info "Verificando e instalando pacotes da Etapa 3..."
+            instalar_pacote "$PACOTE"
 
-
-            for PACOTE in "${PACOTES_ETAPA3[@]}"; do
-
-                instalar_pacote "$PACOTE"
-
-            done
+        done
 
 
-            # ------------------------------------------------
-            # ATUALIZAÇÃO DO CACHE DE COMANDOS
-            # ------------------------------------------------
+        # ------------------------------------------------
+        # ATUALIZAÇÃO DO CACHE DE COMANDOS
+        # ------------------------------------------------
 
-            # Como os programas podem ter sido instalados
-            # durante a execução do script, limpamos o cache
-            # de comandos do Bash antes da verificação.
-
-            hash -r
+        hash -r
 
 
-            # ------------------------------------------------
-            # BACKUP DO .zshrc
-            # ------------------------------------------------
+        # ------------------------------------------------
+        # GARANTIR QUE O .zshrc EXISTE
+        # ------------------------------------------------
 
-            if [ ! -f "$HOME_USUARIO/.zshrc.etapa3.backup" ]; then
-
-                cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa3.backup"
-
-                success "Backup do .zshrc da Etapa 3 criado."
-
-            else
-
-                success "Backup do .zshrc da Etapa 3 já existe."
-
-            fi
+        touch "$ZSHRC"
 
 
-            # ------------------------------------------------
-            # CONFIGURAÇÃO DO BAT
-            # ------------------------------------------------
+        # ------------------------------------------------
+        # BACKUP DO .zshrc
+        # ------------------------------------------------
 
-            # O pacote Debian/Ubuntu/Mint se chama "bat",
-            # mas o executável normalmente se chama "batcat".
+        if [ ! -f "$HOME_USUARIO/.zshrc.etapa3.backup" ]; then
 
-            if grep -Fqx 'alias cat="batcat"' "$ZSHRC"; then
+            cp "$ZSHRC" "$HOME_USUARIO/.zshrc.etapa3.backup"
 
-                success 'Alias cat="batcat" já está configurado.'
+            success "Backup do .zshrc da Etapa 3 criado."
 
-            else
+        else
 
-                echo 'alias cat="batcat"' >> "$ZSHRC"
-
-                success 'Alias cat="batcat" adicionado ao .zshrc.'
-
-            fi
-
-
-            # ------------------------------------------------
-            # VERIFICAÇÃO DOS COMANDOS
-            # ------------------------------------------------
-
-            # O pacote "jq" instala o executável "jq".
-            verificar_comando "jq"
-
-
-            # O pacote "bat" instala o executável "batcat"
-            # nas distribuições Debian e derivadas.
-            verificar_comando "batcat"
-
-
-            # O pacote "neofetch" instala o executável
-            # "neofetch".
-            verificar_comando "neofetch"
-
-
-            # ------------------------------------------------
-            # MARCADOR DA ETAPA 3
-            # ------------------------------------------------
-
-            touch "$ETAPA3"
-
-            success "Etapa 3 concluída."
+            success "Backup do .zshrc da Etapa 3 já existe."
 
         fi
 
-    else
 
-        warning "Etapa 3 cancelada pelo usuário."
+        # ------------------------------------------------
+        # CONFIGURAÇÃO DO BAT
+        # ------------------------------------------------
+
+        # O pacote Debian/Ubuntu/Mint se chama "bat",
+        # mas o executável normalmente se chama "batcat".
+
+        if grep -Fqx 'alias cat="batcat"' "$ZSHRC"; then
+
+            success 'Alias cat="batcat" já está configurado.'
+
+        else
+
+            echo 'alias cat="batcat"' >> "$ZSHRC"
+
+            success 'Alias cat="batcat" adicionado ao .zshrc.'
+
+        fi
+
+
+        # ------------------------------------------------
+        # VERIFICAÇÃO DOS COMANDOS
+        # ------------------------------------------------
+
+        verificar_comando "jq"
+
+        verificar_comando "batcat"
+
+        verificar_comando "neofetch"
+
+
+        # ------------------------------------------------
+        # MARCADOR DA ETAPA
+        # ------------------------------------------------
+
+        touch "$ETAPA3"
+
+        success "Etapa 3 concluída."
 
     fi
+
+else
+
+    warning "Etapa 3 cancelada pelo usuário."
 
 fi
 
