@@ -84,21 +84,17 @@ info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-
 success() {
     echo -e "${GREEN}[OK]${NC} $1"
 }
-
 
 warning() {
     echo -e "${YELLOW}[AVISO]${NC} $1"
 }
 
-
 error() {
     echo -e "${RED}[ERRO]${NC} $1"
 }
-
 
 title() {
     echo
@@ -287,14 +283,12 @@ pacote_instalado() {
 
     local PACOTE="$1"
 
-
     if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
 
         return 0
 
     fi
-
 
     return 1
 }
@@ -318,7 +312,6 @@ pacote_disponivel() {
 
     local PACOTE="$1"
     local CANDIDATO
-
 
     # ------------------------------------------------
     # VERIFICA SE O PACOTE JÁ ESTÁ INSTALADO
@@ -351,7 +344,6 @@ pacote_disponivel() {
 
     fi
 
-
     return 1
 }
 
@@ -363,11 +355,8 @@ pacote_disponivel() {
 verificar_pacotes_etapa() {
 
     local PACOTES=("$@")
-
     local FALTANDO=()
-
     local PACOTE
-
 
     echo
     echo "Verificando disponibilidade dos pacotes..."
@@ -401,13 +390,11 @@ verificar_pacotes_etapa() {
         echo
         echo "Pacotes ausentes:"
 
-
         for PACOTE in "${FALTANDO[@]}"; do
 
             echo "  ✗ $PACOTE"
 
         done
-
 
         echo
 
@@ -433,7 +420,10 @@ instalar_pacote() {
     local PACOTE="$1"
 
 
-    # Verifica se o pacote já está instalado.
+    # ------------------------------------------------
+    # VERIFICA SE JÁ ESTÁ INSTALADO
+    # ------------------------------------------------
+
     if pacote_instalado "$PACOTE"; then
 
         success "$PACOTE já está instalado."
@@ -443,14 +433,32 @@ instalar_pacote() {
     fi
 
 
+    # ------------------------------------------------
+    # INSTALAÇÃO
+    # ------------------------------------------------
+
     info "Instalando $PACOTE..."
 
 
-    # Evita telas interativas do APT/DPKG.
+    # Cada pacote utiliza sua própria chamada ao sudo.
+    # Isso evita depender de um estado compartilhado do
+    # comando sudo durante a instalação.
+
     if sudo DEBIAN_FRONTEND=noninteractive \
         apt-get install -y "$PACOTE"; then
 
-        success "$PACOTE instalado."
+        # Atualiza a informação de pacotes instalados.
+        if pacote_instalado "$PACOTE"; then
+
+            success "$PACOTE instalado com sucesso."
+
+        else
+
+            error "O APT terminou, mas $PACOTE não foi identificado como instalado."
+
+            return 1
+
+        fi
 
     else
 
@@ -469,11 +477,11 @@ instalar_pacote() {
 # Verifica se determinado programa está disponível no PATH.
 #
 # Além de verificar a existência, mostra o caminho encontrado.
+
 verificar_comando() {
 
     local COMANDO="$1"
     local CAMINHO
-
 
     CAMINHO="$(command -v "$COMANDO" 2>/dev/null || true)"
 
@@ -482,9 +490,13 @@ verificar_comando() {
 
         success "$COMANDO encontrado: $CAMINHO"
 
+        return 0
+
     else
 
         warning "$COMANDO não foi encontrado no PATH."
+
+        return 1
 
     fi
 }
@@ -497,9 +509,7 @@ verificar_comando() {
 confirmar_etapa() {
 
     local NUMERO="$1"
-
     local RESPOSTA=""
-
 
     echo
 
@@ -565,20 +575,17 @@ else
 
     if confirmar_etapa 1; then
 
-
         # ------------------------------------------------
         # VERIFICAÇÃO DOS PACOTES
         # ------------------------------------------------
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"; then
 
-
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
             # ------------------------------------------------
 
             info "Instalando pacotes da Etapa 1..."
-
 
             for PACOTE in "${PACOTES_ETAPA1[@]}"; do
 
@@ -599,11 +606,9 @@ else
 
                 info "Instalando Oh My Zsh..."
 
-
                 RUNZSH=no CHSH=no sh -c \
                     "$(curl -fsSL \
                     https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-
 
                 success "Oh My Zsh instalado."
 
@@ -649,7 +654,6 @@ else
                 echo 'ZSH_THEME="agnoster"' >> "$ZSHRC"
 
             fi
-
 
             success "Tema Agnoster configurado."
 
@@ -698,7 +702,6 @@ else
 
             touch "$ETAPA1"
 
-
             success "Etapa 1 concluída."
 
         fi
@@ -728,13 +731,13 @@ else
 
     if confirmar_etapa 2; then
 
-
         # ------------------------------------------------
         # PREPARAÇÃO DO SNAPD NO LINUX MINT
         # ------------------------------------------------
 
-        # O Linux Mint bloqueia o Snap através do arquivo
-        # /etc/apt/preferences.d/nosnap.pref.
+        # O Linux Mint bloqueia o Snap através do arquivo:
+        #
+        # /etc/apt/preferences.d/nosnap.pref
         #
         # Essa alteração é feita somente no Linux Mint.
 
@@ -795,13 +798,11 @@ else
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
 
-
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
             # ------------------------------------------------
 
             info "Instalando pacotes da Etapa 2..."
-
 
             for PACOTE in "${PACOTES_ETAPA2[@]}"; do
 
@@ -821,21 +822,17 @@ else
 
                 success "Figlet Fonts já está instalado."
 
-
             elif [ -d "$FIGLET_FONTS" ]; then
 
                 warning "$FIGLET_FONTS já existe, mas não é um repositório Git."
-
 
             else
 
                 info "Baixando Figlet Fonts..."
 
-
                 git clone \
                     https://github.com/xero/figlet-fonts.git \
                     "$FIGLET_FONTS"
-
 
                 success "Figlet Fonts instalado."
 
@@ -867,10 +864,12 @@ else
             # ------------------------------------------------
 
             # Habilita o socket do Snap e inicia o serviço.
+
             sudo systemctl enable --now snapd.socket 2>/dev/null || true
 
 
             # Aguarda o Snap terminar sua inicialização.
+
             sleep 3
 
 
@@ -879,7 +878,6 @@ else
             # ------------------------------------------------
 
             if command -v snap >/dev/null 2>&1; then
-
 
                 if snap list cool-retro-term >/dev/null 2>&1; then
 
@@ -895,7 +893,6 @@ else
 
                 fi
 
-
             else
 
                 warning "Cool Retro Term não será instalado porque o Snap não está disponível."
@@ -908,7 +905,6 @@ else
             # ------------------------------------------------
 
             if command -v snap >/dev/null 2>&1; then
-
 
                 if snap list mari0 >/dev/null 2>&1; then
 
@@ -923,7 +919,6 @@ else
                     success "Mari0 instalado."
 
                 fi
-
 
             else
 
@@ -948,7 +943,6 @@ else
 
             touch "$ETAPA2"
 
-
             success "Etapa 2 concluída."
 
         fi
@@ -965,6 +959,9 @@ fi
 # ============================================================
 # ETAPA 3 — UTILITÁRIOS
 # ============================================================
+
+title "ETAPA 3 — UTILITÁRIOS"
+
 
 if [ -f "$ETAPA3" ]; then
 
@@ -987,9 +984,23 @@ else
 
             info "Instalando pacotes da Etapa 3..."
 
+
             for PACOTE in "${PACOTES_ETAPA3[@]}"; do
+
                 instalar_pacote "$PACOTE"
+
             done
+
+
+            # ------------------------------------------------
+            # ATUALIZAÇÃO DO CACHE DE COMANDOS
+            # ------------------------------------------------
+
+            # Como os programas podem ter sido instalados
+            # durante a execução do script, limpamos o cache
+            # de comandos do Bash antes da verificação.
+
+            hash -r
 
 
             # ------------------------------------------------
@@ -1070,7 +1081,6 @@ fi
 # ============================================================
 
 title "INSTALAÇÃO FINALIZADA"
-
 
 success "Todas as etapas foram processadas."
 
