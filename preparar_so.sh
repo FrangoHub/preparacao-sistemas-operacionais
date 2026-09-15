@@ -1328,6 +1328,31 @@ success "Todas as etapas foram processadas."
 # ============================================================
 # INFORMAÇÕES FINAIS
 # ============================================================
+# ------------------------------------------------
+# ORIENTAÇÃO FINAL SOBRE O ZSH
+# ------------------------------------------------
+
+info "O Zsh foi configurado como shell padrão."
+
+echo
+
+info "Para aplicar a alteração, feche este terminal e abra um novo."
+
+echo
+
+info "O novo terminal deverá iniciar automaticamente no Zsh."
+
+echo
+
+info "Para verificar o shell atual, execute:"
+echo
+echo "    echo \"\$SHELL\""
+echo
+echo "O resultado esperado é:"
+echo
+echo "    /usr/bin/zsh"
+
+echo
 
 # O ~/.zshrc foi alterado durante a execução.
 #
