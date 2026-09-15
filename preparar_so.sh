@@ -48,7 +48,8 @@
 #   - Confirmação antes de cada etapa
 #   - Verificação dos pacotes
 #   - Execução através de curl | bash
-#   - Marcadores para evitar repetir etapas concluídas
+#   - Marcadores para registrar etapas concluídas
+#   - Reinstalação automática de componentes removidos
 #   - Arquivo de log
 #   - Compatibilidade com diferentes usuários
 #   - Não depende de um caminho específico de usuário
@@ -295,6 +296,46 @@ pacote_instalado() {
 
 
 # ============================================================
+# FUNÇÃO: TODOS OS PACOTES INSTALADOS
+# ============================================================
+
+# Verifica se todos os pacotes de uma determinada etapa
+# continuam instalados.
+#
+# Essa função é importante porque o marcador da etapa não
+# significa que os programas nunca foram removidos.
+#
+# Exemplo:
+#
+#   A Etapa 3 foi concluída.
+#   Depois o usuário removeu o jq.
+#
+# O marcador continua existindo, mas esta função detectará
+# que o jq está faltando e permitirá executar novamente
+# a etapa.
+
+todos_pacotes_instalados() {
+
+    local PACOTES=("$@")
+    local PACOTE
+
+
+    for PACOTE in "${PACOTES[@]}"; do
+
+        if ! pacote_instalado "$PACOTE"; then
+
+            return 1
+
+        fi
+
+    done
+
+
+    return 0
+}
+
+
+# ============================================================
 # FUNÇÃO: PACOTE DISPONÍVEL
 # ============================================================
 
@@ -312,6 +353,7 @@ pacote_disponivel() {
 
     local PACOTE="$1"
     local CANDIDATO
+
 
     # ------------------------------------------------
     # VERIFICA SE O PACOTE JÁ ESTÁ INSTALADO
@@ -344,6 +386,7 @@ pacote_disponivel() {
 
     fi
 
+
     return 1
 }
 
@@ -357,6 +400,7 @@ verificar_pacotes_etapa() {
     local PACOTES=("$@")
     local FALTANDO=()
     local PACOTE
+
 
     echo
     echo "Verificando disponibilidade dos pacotes..."
@@ -390,11 +434,13 @@ verificar_pacotes_etapa() {
         echo
         echo "Pacotes ausentes:"
 
+
         for PACOTE in "${FALTANDO[@]}"; do
 
             echo "  ✗ $PACOTE"
 
         done
+
 
         echo
 
@@ -441,13 +487,17 @@ instalar_pacote() {
 
 
     # Cada pacote utiliza sua própria chamada ao sudo.
-    # Isso evita depender de um estado compartilhado do
-    # comando sudo durante a instalação.
+    # Isso permite que o script reinstale somente os pacotes
+    # que estiverem faltando.
 
     if sudo DEBIAN_FRONTEND=noninteractive \
         apt-get install -y "$PACOTE"; then
 
-        # Atualiza a informação de pacotes instalados.
+
+        # ------------------------------------------------
+        # CONFIRMAÇÃO DA INSTALAÇÃO
+        # ------------------------------------------------
+
         if pacote_instalado "$PACOTE"; then
 
             success "$PACOTE instalado com sucesso."
@@ -483,6 +533,7 @@ verificar_comando() {
     local COMANDO="$1"
     local CAMINHO
 
+
     CAMINHO="$(command -v "$COMANDO" 2>/dev/null || true)"
 
 
@@ -510,6 +561,7 @@ confirmar_etapa() {
 
     local NUMERO="$1"
     local RESPOSTA=""
+
 
     echo
 
@@ -566,12 +618,24 @@ success "Repositórios atualizados."
 title "ETAPA 1 — ZSH E FERRAMENTAS BÁSICAS"
 
 
-if [ -f "$ETAPA1" ]; then
+# A etapa só será ignorada se:
+#
+#   1. O marcador existir
+#   2. Todos os pacotes continuarem instalados
 
-    success "Etapa 1 já foi concluída anteriormente."
+if [ -f "$ETAPA1" ] && todos_pacotes_instalados "${PACOTES_ETAPA1[@]}"; then
+
+    success "Etapa 1 já foi concluída e todos os pacotes continuam instalados."
     info "Pulando Etapa 1."
 
 else
+
+    if [ -f "$ETAPA1" ]; then
+
+        warning "A Etapa 1 já possuía um marcador, mas algum componente está faltando."
+
+    fi
+
 
     if confirmar_etapa 1; then
 
@@ -581,11 +645,13 @@ else
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA1[@]}"; then
 
+
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
             # ------------------------------------------------
 
-            info "Instalando pacotes da Etapa 1..."
+            info "Verificando e instalando pacotes da Etapa 1..."
+
 
             for PACOTE in "${PACOTES_ETAPA1[@]}"; do
 
@@ -606,9 +672,11 @@ else
 
                 info "Instalando Oh My Zsh..."
 
+
                 RUNZSH=no CHSH=no sh -c \
                     "$(curl -fsSL \
                     https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
 
                 success "Oh My Zsh instalado."
 
@@ -655,6 +723,7 @@ else
 
             fi
 
+
             success "Tema Agnoster configurado."
 
 
@@ -674,7 +743,14 @@ else
             fi
 
 
-            if sudo chsh -s "$ZSH_PATH" "$USER"; then
+            CURRENT_SHELL="$(getent passwd "$USER" | cut -d: -f7)"
+
+
+            if [ "$CURRENT_SHELL" = "$ZSH_PATH" ]; then
+
+                success "Zsh já está configurado como shell padrão."
+
+            elif sudo chsh -s "$ZSH_PATH" "$USER"; then
 
                 success "Zsh definido como shell padrão."
 
@@ -689,6 +765,8 @@ else
             # ------------------------------------------------
             # VERIFICAÇÃO DOS PROGRAMAS
             # ------------------------------------------------
+
+            hash -r
 
             verificar_comando "zsh"
             verificar_comando "curl"
@@ -722,14 +800,27 @@ fi
 title "ETAPA 2 — PROGRAMAS E PERSONALIZAÇÃO"
 
 
-if [ -f "$ETAPA2" ]; then
+# A etapa só será ignorada se:
+#
+#   1. O marcador existir
+#   2. Todos os pacotes continuarem instalados
 
-    success "Etapa 2 já foi concluída anteriormente."
+if [ -f "$ETAPA2" ] && todos_pacotes_instalados "${PACOTES_ETAPA2[@]}"; then
+
+    success "Etapa 2 já foi concluída e todos os pacotes continuam instalados."
     info "Pulando Etapa 2."
 
 else
 
+    if [ -f "$ETAPA2" ]; then
+
+        warning "A Etapa 2 já possuía um marcador, mas algum componente está faltando."
+
+    fi
+
+
     if confirmar_etapa 2; then
+
 
         # ------------------------------------------------
         # PREPARAÇÃO DO SNAPD NO LINUX MINT
@@ -798,11 +889,13 @@ else
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA2[@]}"; then
 
+
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
             # ------------------------------------------------
 
-            info "Instalando pacotes da Etapa 2..."
+            info "Verificando e instalando pacotes da Etapa 2..."
+
 
             for PACOTE in "${PACOTES_ETAPA2[@]}"; do
 
@@ -830,9 +923,11 @@ else
 
                 info "Baixando Figlet Fonts..."
 
+
                 git clone \
                     https://github.com/xero/figlet-fonts.git \
                     "$FIGLET_FONTS"
+
 
                 success "Figlet Fonts instalado."
 
@@ -879,6 +974,7 @@ else
 
             if command -v snap >/dev/null 2>&1; then
 
+
                 if snap list cool-retro-term >/dev/null 2>&1; then
 
                     success "Cool Retro Term já está instalado."
@@ -893,6 +989,7 @@ else
 
                 fi
 
+
             else
 
                 warning "Cool Retro Term não será instalado porque o Snap não está disponível."
@@ -905,6 +1002,7 @@ else
             # ------------------------------------------------
 
             if command -v snap >/dev/null 2>&1; then
+
 
                 if snap list mari0 >/dev/null 2>&1; then
 
@@ -920,6 +1018,7 @@ else
 
                 fi
 
+
             else
 
                 warning "Mari0 não será instalado porque o Snap não está disponível."
@@ -931,10 +1030,13 @@ else
             # VERIFICAÇÃO FINAL
             # ------------------------------------------------
 
+            hash -r
+
             verificar_comando "emacs"
             verificar_comando "figlet"
             verificar_comando "lolcat"
             verificar_comando "terminator"
+            verificar_comando "snap"
 
 
             # ------------------------------------------------
@@ -963,14 +1065,27 @@ fi
 title "ETAPA 3 — UTILITÁRIOS"
 
 
-if [ -f "$ETAPA3" ]; then
+# A etapa só será ignorada se:
+#
+#   1. O marcador existir
+#   2. Todos os pacotes continuarem instalados
 
-    success "Etapa 3 já foi concluída anteriormente."
+if [ -f "$ETAPA3" ] && todos_pacotes_instalados "${PACOTES_ETAPA3[@]}"; then
+
+    success "Etapa 3 já foi concluída e todos os pacotes continuam instalados."
     info "Pulando Etapa 3."
 
 else
 
+    if [ -f "$ETAPA3" ]; then
+
+        warning "A Etapa 3 já possuía um marcador, mas algum componente está faltando."
+
+    fi
+
+
     if confirmar_etapa 3; then
+
 
         # ------------------------------------------------
         # VERIFICAÇÃO DOS PACOTES
@@ -978,11 +1093,12 @@ else
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA3[@]}"; then
 
+
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
             # ------------------------------------------------
 
-            info "Instalando pacotes da Etapa 3..."
+            info "Verificando e instalando pacotes da Etapa 3..."
 
 
             for PACOTE in "${PACOTES_ETAPA3[@]}"; do
@@ -1053,7 +1169,8 @@ else
             verificar_comando "batcat"
 
 
-            # Verifica o Neofetch.
+            # O pacote "neofetch" instala o executável
+            # "neofetch".
             verificar_comando "neofetch"
 
 
