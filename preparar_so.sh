@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 # ============================================================
 # PREPARAÇÃO DE SISTEMAS OPERACIONAIS
 # ============================================================
@@ -9,8 +7,7 @@ set -e
 # Este script automatiza a preparação de um ambiente Linux
 # para a disciplina de Sistemas Operacionais.
 #
-# O script foi desenvolvido para distribuições baseadas em
-# Debian que utilizam APT/DPKG, como:
+# Distribuições alvo:
 #
 #   - Ubuntu
 #   - Debian
@@ -20,27 +17,67 @@ set -e
 # O script possui 3 etapas:
 #
 #   ETAPA 1
-#       Zsh, Oh My Zsh, Git, Curl, Nano e Powerline.
+#       Zsh
+#       Oh My Zsh
+#       Curl
+#       Git
+#       Nano
+#       Powerline
 #
 #   ETAPA 2
-#       Emacs, Figlet, Lolcat, Ksudoku, Terminator e Snap.
+#       Emacs
+#       Figlet
+#       Lolcat
+#       Ksudoku
+#       Terminator
+#       Snapd
+#       Cool Retro Term
+#       Mari0
 #
 #   ETAPA 3
-#       Neofetch, JQ, Bat e configuração do alias cat.
+#       Neofetch
+#       JQ
+#       Bat
 #
 # IMPORTANTE:
-#   Os arquivos de marcador NÃO impedem a execução das etapas.
-#   Eles servem apenas para informar que uma etapa já foi
-#   executada anteriormente.
 #
-# Dessa forma, se um programa for removido posteriormente,
-# o script poderá instalá-lo novamente.
+# Os arquivos de marcador NÃO impedem a execução das etapas.
 #
-# O script também foi preparado para ser executado através de:
+# Eles servem somente para informar que a etapa já foi
+# executada anteriormente.
+#
+# Dessa forma, se um programa for removido depois da primeira
+# execução, o script poderá instalá-lo novamente.
+#
+# O script também pode ser executado através de:
 #
 #   curl -fsSL URL | bash
 #
 # ============================================================
+
+
+# ============================================================
+# CONFIGURAÇÕES DO BASH
+# ============================================================
+#
+# Não usamos "set -e".
+#
+# O motivo é que uma falha individual de um pacote não deve
+# interromper toda a execução do script.
+#
+# Por exemplo:
+#
+#   jq falhou
+#
+# Mesmo assim:
+#
+#   bat
+#   neofetch
+#
+# devem continuar sendo processados.
+# ============================================================
+
+set -o pipefail
 
 
 # ============================================================
@@ -86,30 +123,16 @@ title() {
 # ============================================================
 # VERIFICAÇÃO DO USUÁRIO
 # ============================================================
-#
-# O script não deve ser executado diretamente como root.
-#
-# Isso é importante porque várias configurações, como:
-#
-#   - .zshrc
-#   - Oh My Zsh
-#   - aliases
-#
-# pertencem ao usuário que está executando o script.
-#
-# Quando for necessário realizar uma operação administrativa,
-# o script utilizará sudo.
-# ============================================================
 
 if [ "$(id -u)" -eq 0 ]; then
     error "Não execute este script como root."
-    error "Execute como usuário normal."
+    error "Execute o script como usuário normal."
     exit 1
 fi
 
 
 # ============================================================
-# IDENTIFICAÇÃO DO SISTEMA OPERACIONAL
+# IDENTIFICAÇÃO DO SISTEMA
 # ============================================================
 
 if [ ! -r /etc/os-release ]; then
@@ -126,13 +149,16 @@ source /etc/os-release
 # ============================================================
 
 case "${ID:-}" in
+
     ubuntu|debian|linuxmint|pop)
-        success "Sistema operacional compatível detectado: ${PRETTY_NAME:-$ID}"
+        success "Sistema compatível: ${PRETTY_NAME:-$ID}"
         ;;
+
     *)
-        warning "Distribuição detectada: ${PRETTY_NAME:-desconhecida}"
-        warning "Esta distribuição não está oficialmente listada como suportada."
+        warning "Sistema detectado: ${PRETTY_NAME:-desconhecido}"
+        warning "A distribuição não está na lista oficial deste script."
         ;;
+
 esac
 
 
@@ -169,7 +195,7 @@ fi
 
 
 # ============================================================
-# INFORMAÇÕES DO USUÁRIO
+# INFORMAÇÕES DO SISTEMA
 # ============================================================
 
 ARQUITETURA="$(dpkg --print-architecture)"
@@ -185,7 +211,7 @@ ZSHRC="$HOME_USUARIO/.zshrc"
 
 
 # ============================================================
-# PACOTES DAS ETAPAS
+# LISTA DE PACOTES
 # ============================================================
 
 PACOTES_ETAPA1=(
@@ -213,7 +239,16 @@ PACOTES_ETAPA3=(
 
 
 # ============================================================
-# INÍCIO DO LOG
+# LISTAS DE RESULTADOS
+# ============================================================
+
+PACOTES_INSTALADOS=()
+PACOTES_JA_INSTALADOS=()
+PACOTES_FALHARAM=()
+
+
+# ============================================================
+# LOG
 # ============================================================
 
 touch "$LOG_FILE"
@@ -237,14 +272,17 @@ echo
 
 
 # ============================================================
-# AUTENTICAÇÃO DO SUDO
+# SUDO
 # ============================================================
 
 info "Verificando acesso administrativo..."
 
-sudo -v
-
-success "Acesso administrativo confirmado."
+if sudo -v; then
+    success "Acesso administrativo confirmado."
+else
+    error "Não foi possível obter acesso administrativo."
+    exit 1
+fi
 
 
 # ============================================================
@@ -255,9 +293,17 @@ title "ATUALIZAÇÃO DOS REPOSITÓRIOS"
 
 info "Atualizando os repositórios do sistema..."
 
-sudo apt-get update
+if sudo apt-get update; then
 
-success "Repositórios atualizados."
+    success "Repositórios atualizados."
+
+else
+
+    error "Falha ao atualizar os repositórios."
+
+    warning "O script continuará, mas alguns pacotes podem não estar disponíveis."
+
+fi
 
 
 # ============================================================
@@ -265,19 +311,53 @@ success "Repositórios atualizados."
 # pacote_instalado
 # ============================================================
 #
-# Verifica se um pacote está realmente instalado.
-#
-# Utilizamos dpkg-query porque apenas verificar se o comando
-# existe não é suficiente para determinar se um pacote Debian
-# está instalado.
+# Verifica se um pacote Debian está realmente instalado.
 # ============================================================
 
 pacote_instalado() {
+
     local PACOTE="$1"
 
-    if dpkg-query -W -f='${Status}' "$PACOTE" 2>/dev/null \
+    if dpkg-query \
+        -W \
+        -f='${Status}' \
+        "$PACOTE" 2>/dev/null \
         | grep -q "install ok installed"; then
 
+        return 0
+
+    fi
+
+    return 1
+}
+
+
+# ============================================================
+# FUNÇÃO:
+# pacote_tem_candidato
+# ============================================================
+#
+# Verifica se o APT possui uma versão candidata do pacote.
+#
+# Isso é especialmente importante no Linux Mint, onde o snapd
+# pode aparecer como:
+#
+#   Candidate: (none)
+#
+# quando o bloqueio do Snap ainda está ativo.
+# ============================================================
+
+pacote_tem_candidato() {
+
+    local PACOTE="$1"
+    local CANDIDATO
+
+    CANDIDATO="$(
+        apt-cache policy "$PACOTE" 2>/dev/null \
+            | awk -F': ' '/Candidate:/ {print $2; exit}'
+    )"
+
+    if [ -n "$CANDIDATO" ] && [ "$CANDIDATO" != "(none)" ]; then
         return 0
     fi
 
@@ -290,49 +370,104 @@ pacote_instalado() {
 # instalar_pacote
 # ============================================================
 #
-# Esta é a parte mais importante do script.
-#
-# Cada pacote é analisado individualmente.
+# Instala um pacote individualmente.
 #
 # Se já estiver instalado:
 #
-#       não faz nada.
+#   não reinstala.
 #
-# Se não estiver instalado:
+# Se estiver ausente:
 #
-#       executa apt-get install.
+#   tenta instalar.
 #
-# Isso permite que o script seja executado várias vezes e
-# também permite reparar programas que foram removidos depois
-# da execução anterior.
+# Se falhar:
+#
+#   registra o erro e continua.
+#
+# Isso torna o script capaz de reparar instalações parciais.
 # ============================================================
 
 instalar_pacote() {
+
     local PACOTE="$1"
 
     echo
 
+    # --------------------------------------------------------
+    # Já instalado
+    # --------------------------------------------------------
+
     if pacote_instalado "$PACOTE"; then
+
         success "$PACOTE já está instalado."
+
+        PACOTES_JA_INSTALADOS+=("$PACOTE")
+
         return 0
+
     fi
 
+
     info "$PACOTE não está instalado."
+
+
+    # --------------------------------------------------------
+    # Verificação do candidato
+    # --------------------------------------------------------
+
+    if ! pacote_tem_candidato "$PACOTE"; then
+
+        error "O APT não possui candidato disponível para: $PACOTE"
+
+        warning "Não foi possível instalar $PACOTE nesta execução."
+
+        PACOTES_FALHARAM+=("$PACOTE")
+
+        return 1
+
+    fi
+
+
+    # --------------------------------------------------------
+    # Instalação
+    # --------------------------------------------------------
+
     info "Instalando $PACOTE..."
 
     if sudo DEBIAN_FRONTEND=noninteractive \
         apt-get install -y "$PACOTE"; then
 
+
+        # ----------------------------------------------------
+        # Confirmação
+        # ----------------------------------------------------
+
         if pacote_instalado "$PACOTE"; then
+
             success "$PACOTE instalado com sucesso."
+
+            PACOTES_INSTALADOS+=("$PACOTE")
+
+            return 0
+
         else
-            error "O APT terminou, mas $PACOTE não foi identificado como instalado."
+
+            error "O APT terminou, mas $PACOTE não foi detectado como instalado."
+
+            PACOTES_FALHARAM+=("$PACOTE")
+
             return 1
+
         fi
 
     else
+
         error "Falha ao instalar o pacote $PACOTE."
+
+        PACOTES_FALHARAM+=("$PACOTE")
+
         return 1
+
     fi
 }
 
@@ -341,24 +476,22 @@ instalar_pacote() {
 # FUNÇÃO:
 # verificar_comando
 # ============================================================
-#
-# Verifica se determinado programa está disponível no PATH.
-#
-# A função não encerra o script caso o comando não exista.
-# Isso é importante porque o set -e poderia encerrar o script
-# antes de podermos continuar o processo de instalação/reparo.
-# ============================================================
 
 verificar_comando() {
+
     local COMANDO="$1"
     local CAMINHO
 
     CAMINHO="$(command -v "$COMANDO" 2>/dev/null || true)"
 
     if [ -n "$CAMINHO" ]; then
+
         success "$COMANDO encontrado: $CAMINHO"
+
     else
+
         warning "$COMANDO não foi encontrado no PATH."
+
     fi
 
     return 0
@@ -369,37 +502,37 @@ verificar_comando() {
 # FUNÇÃO:
 # confirmar_etapa
 # ============================================================
-#
-# Solicita confirmação antes de executar cada etapa.
-#
-# /dev/tty é utilizado para que o read continue funcionando
-# mesmo quando o script é executado desta forma:
-#
-# curl ... | bash
-# ============================================================
 
 confirmar_etapa() {
+
     local NUMERO="$1"
     local RESPOSTA=""
 
     echo
 
     if [ ! -r /dev/tty ]; then
+
         warning "Terminal interativo não está disponível."
+
         return 1
+
     fi
+
 
     read -r -p \
         "Deseja continuar com a Etapa $NUMERO? [S/n]: " \
         RESPOSTA </dev/tty
 
+
     if [ -z "$RESPOSTA" ]; then
         return 0
     fi
 
+
     if [[ "$RESPOSTA" =~ ^[Ss]$ ]]; then
         return 0
     fi
+
 
     return 1
 }
@@ -411,22 +544,29 @@ confirmar_etapa() {
 
 title "ETAPA 1 - ZSH E FERRAMENTAS BÁSICAS"
 
+
 if [ -f "$ETAPA1" ]; then
+
     success "A Etapa 1 já foi executada anteriormente."
     info "Os componentes serão verificados novamente."
+
 else
+
     info "A Etapa 1 ainda não foi executada."
+
 fi
 
 
 if confirmar_etapa 1; then
 
-    echo
 
-    info "Verificando e instalando os pacotes da Etapa 1..."
+    info "Verificando os pacotes da Etapa 1..."
+
 
     for PACOTE in "${PACOTES_ETAPA1[@]}"; do
-        instalar_pacote "$PACOTE"
+
+        instalar_pacote "$PACOTE" || true
+
     done
 
 
@@ -445,21 +585,26 @@ if confirmar_etapa 1; then
         info "Oh My Zsh não está instalado."
         info "Instalando Oh My Zsh..."
 
-        RUNZSH=no CHSH=no sh -c \
-            "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+        if RUNZSH=no CHSH=no sh -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"; then
 
-        success "Oh My Zsh instalado."
+            success "Oh My Zsh instalado."
+
+        else
+
+            error "Falha ao instalar o Oh My Zsh."
+
+        fi
 
     fi
 
 
     # ========================================================
-    # ARQUIVO .zshrc
+    # .zshrc
     # ========================================================
 
     if [ ! -f "$ZSHRC" ]; then
 
-        info "Arquivo .zshrc não encontrado."
         info "Criando $ZSHRC..."
 
         touch "$ZSHRC"
@@ -474,7 +619,7 @@ if confirmar_etapa 1; then
 
 
     # ========================================================
-    # BACKUP DO .zshrc
+    # BACKUP
     # ========================================================
 
     if [ ! -f "${ZSHRC}.etapa1.backup" ]; then
@@ -491,12 +636,14 @@ if confirmar_etapa 1; then
 
 
     # ========================================================
-    # CONFIGURAÇÃO DO TEMA AGNOSTER
+    # AGNOSTER
     # ========================================================
 
     if grep -q '^ZSH_THEME=' "$ZSHRC"; then
 
-        sed -i 's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' "$ZSHRC"
+        sed -i \
+            's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' \
+            "$ZSHRC"
 
     else
 
@@ -508,23 +655,32 @@ if confirmar_etapa 1; then
 
 
     # ========================================================
-    # DEFINIR ZSH COMO SHELL PADRÃO
+    # ZSH COMO SHELL PADRÃO
     # ========================================================
 
     if command -v zsh >/dev/null 2>&1; then
 
         ZSH_PATH="$(command -v zsh)"
 
-        CURRENT_SHELL="$(getent passwd "$USER" \
-            | awk -F: '{print $7}')"
+        CURRENT_SHELL="$(
+            getent passwd "$USER" \
+                | awk -F: '{print $7}'
+        )"
+
 
         if [ "$CURRENT_SHELL" != "$ZSH_PATH" ]; then
 
             info "Configurando Zsh como shell padrão..."
 
-            chsh -s "$ZSH_PATH"
+            if chsh -s "$ZSH_PATH"; then
 
-            success "Zsh definido como shell padrão."
+                success "Zsh definido como shell padrão."
+
+            else
+
+                error "Não foi possível alterar o shell padrão."
+
+            fi
 
         else
 
@@ -570,11 +726,16 @@ fi
 
 title "ETAPA 2 - APLICATIVOS E SNAP"
 
+
 if [ -f "$ETAPA2" ]; then
+
     success "A Etapa 2 já foi executada anteriormente."
     info "Os componentes serão verificados novamente."
+
 else
+
     info "A Etapa 2 ainda não foi executada."
+
 fi
 
 
@@ -584,20 +745,17 @@ if confirmar_etapa 2; then
     # ========================================================
     # CORREÇÃO DO SNAP NO LINUX MINT
     # ========================================================
-    #
-    # O Linux Mint possui um arquivo chamado nosnap.pref que
-    # impede a instalação do pacote snapd.
-    #
-    # Removemos temporariamente esse bloqueio e fazemos backup.
-    # ========================================================
 
     if [ "${ID:-}" = "linuxmint" ]; then
 
+
         NOSNAP_PREF="/etc/apt/preferences.d/nosnap.pref"
+
 
         if [ -f "$NOSNAP_PREF" ]; then
 
             info "Bloqueio do Snap detectado no Linux Mint."
+
 
             if [ ! -f "${NOSNAP_PREF}.backup" ]; then
 
@@ -613,15 +771,28 @@ if confirmar_etapa 2; then
 
             fi
 
+
             sudo rm -f "$NOSNAP_PREF"
 
             success "Bloqueio do Snap removido."
 
+
             info "Atualizando os repositórios após liberar o Snap..."
 
-            sudo apt-get update
 
-            success "Repositórios atualizados."
+            if sudo apt-get update; then
+
+                success "Repositórios atualizados."
+
+            else
+
+                warning "Não foi possível atualizar os repositórios."
+
+            fi
+
+        else
+
+            success "Nenhum bloqueio nosnap.pref foi encontrado."
 
         fi
 
@@ -631,26 +802,16 @@ if confirmar_etapa 2; then
     # ========================================================
     # INSTALAÇÃO DOS PACOTES
     # ========================================================
-    #
-    # IMPORTANTE:
-    #
-    # Não usamos mais verificar_pacotes_etapa().
-    #
-    # Cada pacote é instalado individualmente.
-    #
-    # Isso significa que se:
-    #
-    #   snapd
-    #
-    # for removido, ele será instalado novamente.
-    # ========================================================
 
     echo
 
-    info "Verificando e instalando os pacotes da Etapa 2..."
+    info "Verificando os pacotes da Etapa 2..."
+
 
     for PACOTE in "${PACOTES_ETAPA2[@]}"; do
-        instalar_pacote "$PACOTE"
+
+        instalar_pacote "$PACOTE" || true
+
     done
 
 
@@ -659,6 +820,7 @@ if confirmar_etapa 2; then
     # ========================================================
 
     FIGLET_FONTS="$HOME_USUARIO/figlet-fonts"
+
 
     if [ -d "$FIGLET_FONTS" ]; then
 
@@ -669,20 +831,28 @@ if confirmar_etapa 2; then
         info "Repositório figlet-fonts não encontrado."
         info "Clonando repositório..."
 
-        git clone \
-            https://github.com/xero/figlet-fonts.git \
-            "$FIGLET_FONTS"
 
-        success "Fontes do Figlet instaladas."
+        if git clone \
+            https://github.com/xero/figlet-fonts.git \
+            "$FIGLET_FONTS"; then
+
+            success "Fontes do Figlet instaladas."
+
+        else
+
+            error "Falha ao clonar as fontes do Figlet."
+
+        fi
 
     fi
 
 
     # ========================================================
-    # CONFIGURAÇÃO DO FIGLET NO .zshrc
+    # CONFIGURAÇÃO DO FIGLET
     # ========================================================
 
     FIGLET_CONFIG='figlet "OHMYZSH!" -f "3d" -d "$HOME/figlet-fonts/" | lolcat'
+
 
     if grep -Fq 'figlet "OHMYZSH!"' "$ZSHRC"; then
 
@@ -705,31 +875,67 @@ if confirmar_etapa 2; then
 
     echo
 
-    info "Configurando o serviço do Snap..."
-
-    if command -v systemctl >/dev/null 2>&1; then
-
-        sudo systemctl enable --now snapd.socket 2>/dev/null || true
-
-    fi
-
-    hash -r
-
-    sleep 3
+    info "Configurando o serviço snapd..."
 
 
-    # ========================================================
-    # VERIFICAR SNAP
-    # ========================================================
+    if pacote_instalado snapd; then
 
-    if command -v snap >/dev/null 2>&1; then
 
-        success "Comando snap encontrado."
+        if command -v systemctl >/dev/null 2>&1; then
+
+            if sudo systemctl enable --now snapd.socket; then
+
+                success "snapd.socket ativado."
+
+            else
+
+                warning "Não foi possível ativar snapd.socket."
+
+            fi
+
+        fi
+
+
+        hash -r
+
+
+        # ----------------------------------------------------
+        # Aguarda o socket
+        # ----------------------------------------------------
+
+        for TENTATIVA in 1 2 3 4 5 6 7 8 9 10; do
+
+            if command -v snap >/dev/null 2>&1; then
+                break
+            fi
+
+            sleep 1
+            hash -r
+
+        done
+
 
     else
 
-        warning "Comando snap ainda não foi encontrado."
-        warning "O serviço snapd pode precisar de alguns segundos para iniciar."
+        warning "snapd não está instalado."
+        warning "As instalações via Snap serão ignoradas."
+
+    fi
+
+
+    # ========================================================
+    # VERIFICAÇÃO DO SNAP
+    # ========================================================
+
+    echo
+
+    if command -v snap >/dev/null 2>&1; then
+
+        success "Comando snap encontrado: $(command -v snap)"
+
+    else
+
+        error "Comando snap não foi encontrado."
 
     fi
 
@@ -740,6 +946,7 @@ if confirmar_etapa 2; then
 
     if command -v snap >/dev/null 2>&1; then
 
+
         if snap list cool-retro-term >/dev/null 2>&1; then
 
             success "cool-retro-term já está instalado."
@@ -748,9 +955,16 @@ if confirmar_etapa 2; then
 
             info "Instalando cool-retro-term..."
 
-            sudo snap install cool-retro-term --classic
 
-            success "cool-retro-term instalado."
+            if sudo snap install cool-retro-term --classic; then
+
+                success "cool-retro-term instalado."
+
+            else
+
+                error "Falha ao instalar cool-retro-term."
+
+            fi
 
         fi
 
@@ -763,6 +977,7 @@ if confirmar_etapa 2; then
 
     if command -v snap >/dev/null 2>&1; then
 
+
         if snap list mari0 >/dev/null 2>&1; then
 
             success "mari0 já está instalado."
@@ -771,9 +986,16 @@ if confirmar_etapa 2; then
 
             info "Instalando mari0..."
 
-            sudo snap install mari0
 
-            success "mari0 instalado."
+            if sudo snap install mari0; then
+
+                success "mari0 instalado."
+
+            else
+
+                error "Falha ao instalar mari0."
+
+            fi
 
         fi
 
@@ -816,11 +1038,16 @@ fi
 
 title "ETAPA 3 - UTILITÁRIOS"
 
+
 if [ -f "$ETAPA3" ]; then
+
     success "A Etapa 3 já foi executada anteriormente."
     info "Os componentes serão verificados novamente."
+
 else
+
     info "A Etapa 3 ainda não foi executada."
+
 fi
 
 
@@ -828,26 +1055,23 @@ if confirmar_etapa 3; then
 
 
     # ========================================================
-    # INSTALAÇÃO DOS PACOTES
-    # ========================================================
-    #
-    # Cada pacote é analisado individualmente.
-    #
-    # Se jq ou bat forem removidos posteriormente, eles serão
-    # instalados novamente na próxima execução do script.
+    # INSTALAÇÃO
     # ========================================================
 
     echo
 
-    info "Verificando e instalando os pacotes da Etapa 3..."
+    info "Verificando os pacotes da Etapa 3..."
+
 
     for PACOTE in "${PACOTES_ETAPA3[@]}"; do
-        instalar_pacote "$PACOTE"
+
+        instalar_pacote "$PACOTE" || true
+
     done
 
 
     # ========================================================
-    # ATUALIZAR CACHE DOS COMANDOS
+    # ATUALIZA CACHE
     # ========================================================
 
     hash -r
@@ -871,27 +1095,21 @@ if confirmar_etapa 3; then
 
 
     # ========================================================
-    # ALIAS CAT -> BATCAT
-    # ========================================================
-    #
-    # Em Debian/Ubuntu, o executável do pacote bat normalmente
-    # se chama batcat.
-    #
-    # Por isso o alias utiliza:
-    #
-    #     alias cat="batcat"
+    # ALIAS CAT
     # ========================================================
 
     if grep -qE '^alias cat=' "$ZSHRC"; then
 
-        sed -i 's/^alias cat=.*/alias cat="batcat"/' "$ZSHRC"
+        sed -i \
+            's/^alias cat=.*/alias cat="batcat"/' \
+            "$ZSHRC"
 
         success "Alias cat atualizado."
 
     else
 
         echo >> "$ZSHRC"
-        echo '# Alias para substituir cat pelo bat' >> "$ZSHRC"
+        echo "# Alias para substituir cat pelo bat" >> "$ZSHRC"
         echo 'alias cat="batcat"' >> "$ZSHRC"
 
         success "Alias cat configurado."
@@ -900,16 +1118,80 @@ if confirmar_etapa 3; then
 
 
     # ========================================================
-    # VERIFICAÇÃO DOS PROGRAMAS
+    # VERIFICAÇÃO DO JQ
     # ========================================================
 
     echo
 
-    info "Verificando componentes da Etapa 3..."
+    info "Verificando jq..."
 
-    verificar_comando jq
-    verificar_comando batcat
-    verificar_comando neofetch
+    hash -r
+
+
+    if command -v jq >/dev/null 2>&1; then
+
+        success "jq encontrado: $(command -v jq)"
+
+    else
+
+        error "jq continua ausente após a instalação."
+
+    fi
+
+
+    # ========================================================
+    # VERIFICAÇÃO DO BAT
+    # ========================================================
+    #
+    # Dependendo da distribuição, o executável pode ser:
+    #
+    #   bat
+    #
+    # ou:
+    #
+    #   batcat
+    #
+    # O pacote Debian/Ubuntu normalmente utiliza batcat.
+    # ========================================================
+
+    echo
+
+    info "Verificando bat..."
+
+
+    if command -v batcat >/dev/null 2>&1; then
+
+        success "bat encontrado como batcat: $(command -v batcat)"
+
+    elif command -v bat >/dev/null 2>&1; then
+
+        success "bat encontrado: $(command -v bat)"
+
+    else
+
+        error "bat continua ausente após a instalação."
+
+    fi
+
+
+    # ========================================================
+    # VERIFICAÇÃO DO NEOFETCH
+    # ========================================================
+
+    echo
+
+    info "Verificando neofetch..."
+
+
+    if command -v neofetch >/dev/null 2>&1; then
+
+        success "neofetch encontrado: $(command -v neofetch)"
+
+    else
+
+        warning "neofetch não foi encontrado."
+
+    fi
 
 
     # ========================================================
@@ -928,44 +1210,102 @@ fi
 
 
 # ============================================================
-# FINALIZAÇÃO
+# RESUMO FINAL
 # ============================================================
 
-title "PREPARAÇÃO CONCLUÍDA"
+title "RESUMO DA EXECUÇÃO"
 
-success "O script terminou a execução."
+
+echo
+
+info "Pacotes instalados nesta execução:"
+
+if [ "${#PACOTES_INSTALADOS[@]}" -eq 0 ]; then
+
+    echo "    Nenhum."
+
+else
+
+    for PACOTE in "${PACOTES_INSTALADOS[@]}"; do
+        echo "    - $PACOTE"
+    done
+
+fi
+
+
+echo
+
+info "Pacotes que já estavam instalados:"
+
+if [ "${#PACOTES_JA_INSTALADOS[@]}" -eq 0 ]; then
+
+    echo "    Nenhum."
+
+else
+
+    for PACOTE in "${PACOTES_JA_INSTALADOS[@]}"; do
+        echo "    - $PACOTE"
+    done
+
+fi
+
+
+echo
+
+info "Pacotes que apresentaram erro:"
+
+if [ "${#PACOTES_FALHARAM[@]}" -eq 0 ]; then
+
+    success "Nenhum pacote apresentou erro."
+
+else
+
+    for PACOTE in "${PACOTES_FALHARAM[@]}"; do
+        echo -e "    ${RED}- $PACOTE${NC}"
+    done
+
+fi
+
+
+# ============================================================
+# MARCADORES
+# ============================================================
 
 echo
 
 info "Marcadores das etapas:"
+
 echo
 echo "    $ETAPA1"
 echo "    $ETAPA2"
 echo "    $ETAPA3"
 
+
+# ============================================================
+# LOG
+# ============================================================
+
 echo
 
 info "Arquivo de log:"
+
 echo
 echo "    $LOG_FILE"
+
+
+# ============================================================
+# ZSH
+# ============================================================
 
 echo
 
 info "Arquivo de configuração do Zsh:"
+
 echo
 echo "    $ZSHRC"
 
-echo
 
-# ============================================================
-# INFORMAÇÕES SOBRE O ZSH
-# ============================================================
-#
-# Não usamos "source ~/.zshrc" aqui porque o script pode estar
-# sendo executado dentro do Bash.
-#
-# O Oh My Zsh deve ser carregado pelo próprio Zsh.
-# ============================================================
+echo
 
 info "O Zsh foi configurado como shell padrão."
 
@@ -980,15 +1320,35 @@ info "O novo terminal deverá iniciar automaticamente no Zsh."
 echo
 
 info "Para verificar o shell atual, execute:"
+
 echo
 echo '    echo "$SHELL"'
 
 echo
 
 info "O resultado esperado é:"
+
 echo
 echo "    /usr/bin/zsh"
 
+
+# ============================================================
+# FINAL
+# ============================================================
+
 echo
 
+if [ "${#PACOTES_FALHARAM[@]}" -eq 0 ]; then
+
+    success "Preparação concluída sem erros de instalação."
+
+else
+
+    warning "A preparação terminou, mas alguns pacotes apresentaram erro."
+
+    warning "Consulte o resumo acima e o arquivo de log."
+
+fi
+
+echo
 success "Fim do script."
