@@ -963,11 +963,8 @@ fi
 
 
 # ============================================================
-# ETAPA 3
+# ETAPA 3 — UTILITÁRIOS
 # ============================================================
-
-title "ETAPA 3 — UTILITÁRIOS"
-
 
 if [ -f "$ETAPA3" ]; then
 
@@ -978,13 +975,11 @@ else
 
     if confirmar_etapa 3; then
 
-
         # ------------------------------------------------
         # VERIFICAÇÃO DOS PACOTES
         # ------------------------------------------------
 
         if verificar_pacotes_etapa "${PACOTES_ETAPA3[@]}"; then
-
 
             # ------------------------------------------------
             # INSTALAÇÃO DOS PACOTES
@@ -992,11 +987,8 @@ else
 
             info "Instalando pacotes da Etapa 3..."
 
-
             for PACOTE in "${PACOTES_ETAPA3[@]}"; do
-
                 instalar_pacote "$PACOTE"
-
             done
 
 
@@ -1021,10 +1013,8 @@ else
             # CONFIGURAÇÃO DO BAT
             # ------------------------------------------------
 
-            # Em Debian, Ubuntu e Linux Mint, o pacote "bat"
-            # normalmente instala o executável como "batcat".
-            #
-            # Por isso o alias utiliza "batcat".
+            # O pacote Debian/Ubuntu/Mint se chama "bat",
+            # mas o executável normalmente se chama "batcat".
 
             if grep -Fqx 'alias cat="batcat"' "$ZSHRC"; then
 
@@ -1040,18 +1030,19 @@ else
 
 
             # ------------------------------------------------
-            # VERIFICAÇÃO FINAL
+            # VERIFICAÇÃO DOS COMANDOS
             # ------------------------------------------------
 
-            # jq possui o mesmo nome no pacote e no executável.
+            # O pacote "jq" instala o executável "jq".
             verificar_comando "jq"
 
 
-            # O pacote se chama "bat", mas no Debian e derivados
-            # o executável normalmente se chama "batcat".
+            # O pacote "bat" instala o executável "batcat"
+            # nas distribuições Debian e derivadas.
             verificar_comando "batcat"
 
 
+            # Verifica o Neofetch.
             verificar_comando "neofetch"
 
 
@@ -1060,7 +1051,6 @@ else
             # ------------------------------------------------
 
             touch "$ETAPA3"
-
 
             success "Etapa 3 concluída."
 
