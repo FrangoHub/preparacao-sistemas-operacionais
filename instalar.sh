@@ -515,10 +515,6 @@ confirmar_reexecucao_etapa() {
     local resposta
 
 
-    # --------------------------------------------------------
-    # ETAPA AINDA NÃO FOI EXECUTADA
-    # --------------------------------------------------------
-
     if [ ! -f "$marcador" ]; then
 
         confirmar_etapa "$numero" "$descricao"
@@ -527,10 +523,6 @@ confirmar_reexecucao_etapa() {
 
     fi
 
-
-    # --------------------------------------------------------
-    # ETAPA JÁ FOI EXECUTADA
-    # --------------------------------------------------------
 
     echo
     echo -e "${BOLD}Etapa $numero - $descricao${RESET}"
@@ -892,10 +884,6 @@ executar_etapa2() {
     title "INSTALANDO NEOVIM + KICKSTART.NVIM"
 
 
-    # --------------------------------------------------------
-    # INSTALAR NEOVIM
-    # --------------------------------------------------------
-
     if snap list nvim >/dev/null 2>&1; then
 
         success "Neovim já está instalado."
@@ -988,8 +976,7 @@ executar_etapa2() {
             2>&1 | tee -a "$LOG_FILE"; then
 
             success "cool-retro-term instalado."
-[INFO] Atualizando plugins do Fish...
-fisher: Plugin not installed: "#"
+
         else
 
             warning "Não foi possível instalar cool-retro-term."
@@ -1036,8 +1023,7 @@ fisher: Plugin not installed: "#"
     verificar_comando emacs
     verificar_comando figlet
     verificar_comando lolcat
-    verificar_comando terminator[INFO] Atualizando plugins do Fish...
-fisher: Plugin not installed: "#"
+    verificar_comando terminator
     verificar_comando snap
 
 
@@ -1175,10 +1161,6 @@ executar_etapa4() {
     MESLO_INSTALADA=0
 
 
-    # --------------------------------------------------------
-    # PROCURAR MESLO
-    # --------------------------------------------------------
-
     if find \
         "$HOME_USUARIO/.local/share/fonts" \
         "$HOME_USUARIO/.fonts" \
@@ -1194,10 +1176,6 @@ executar_etapa4() {
 
     fi
 
-
-    # --------------------------------------------------------
-    # INSTALAR MESLO
-    # --------------------------------------------------------
 
     if [ "$MESLO_INSTALADA" -eq 0 ]; then
 
@@ -1227,10 +1205,6 @@ executar_etapa4() {
         fi
 
 
-        # ----------------------------------------------------
-        # VERIFICAR UNZIP
-        # ----------------------------------------------------
-
         if ! command -v unzip >/dev/null 2>&1; then
 
             info "Instalando unzip..."
@@ -1239,10 +1213,6 @@ executar_etapa4() {
 
         fi
 
-
-        # ----------------------------------------------------
-        # EXTRAIR
-        # ----------------------------------------------------
 
         info "Extraindo Meslo Nerd Font..."
 
@@ -1415,6 +1385,7 @@ executar_etapa4() {
 
         if fish -c \
             'curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source; fisher install jorgebucaran/fisher' \
+            </dev/null \
             2>&1 | tee -a "$LOG_FILE"; then
 
             success "Fisher instalado."
@@ -1448,6 +1419,7 @@ executar_etapa4() {
 
         if fish -c \
             'fisher install IlanCosman/tide@v6' \
+            </dev/null \
             2>&1 | tee -a "$LOG_FILE"; then
 
             success "Tide instalado."
@@ -1463,34 +1435,25 @@ executar_etapa4() {
     fi
 
 
-# ========================================================
-# FISHER UPDATE
-# ========================================================
+    # ========================================================
+    # FISHER UPDATE
+    # ========================================================
 
-info "Atualizando plugins do Fish..."
-
-FISH_PLUGINS="$HOME_USUARIO/.config/fish/fish_plugins"
-
-if [ -f "$FISH_PLUGINS" ]; then
-
-    # Remove comentários e linhas vazias que podem ser
-    # interpretados pelo Fisher como nomes de plugins.
-    sed -i \
-        -e '/^[[:space:]]*#/d' \
-        -e '/^[[:space:]]*$/d' \
-        "$FISH_PLUGINS"
-
-fi
+    info "Atualizando plugins do Fish..."
 
 
-info "Testando Fisher..."
+    if fish -c 'fisher update' \
+        </dev/null \
+        2>&1 | tee -a "$LOG_FILE"; then
 
-fish -c 'echo "FISHER PLUGINS:"; cat ~/.config/fish/fish_plugins; echo "----"; fisher update' \
-    2>&1 | tee -a "$LOG_FILE"
+        success "Plugins do Fish atualizados."
 
-    warning "Não foi possível atualizar todos os plugins."
+    else
 
-fi
+        warning "Não foi possível atualizar todos os plugins."
+
+    fi
+
 
     # ========================================================
     # VERIFICAÇÕES
@@ -1561,20 +1524,12 @@ perguntar_reconfigurar_tide() {
     local resposta
 
 
-    # --------------------------------------------------------
-    # VERIFICAR FISH
-    # --------------------------------------------------------
-
     if ! command -v fish >/dev/null 2>&1; then
 
         return 0
 
     fi
 
-
-    # --------------------------------------------------------
-    # VERIFICAR TIDE
-    # --------------------------------------------------------
 
     if ! fish -c 'type -q tide' >/dev/null 2>&1; then
 
