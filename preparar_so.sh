@@ -493,7 +493,7 @@ if confirmar_etapa 1; then
 
             info "Configurando Zsh como shell padrão..."
 
-            if chsh -s "$ZSH_PATH"; then
+            if sudo -n chsh -s "$ZSH_PATH"; then
                 success "Zsh configurado como shell padrão."
             else
                 warning "Não foi possível alterar o shell padrão."
