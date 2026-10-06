@@ -1483,12 +1483,10 @@ if [ -f "$FISH_PLUGINS" ]; then
 fi
 
 
-if fish -c 'fisher update' \
-    2>&1 | tee -a "$LOG_FILE"; then
+info "Testando Fisher..."
 
-    success "Plugins do Fish atualizados."
-
-else
+fish -c 'echo "FISHER PLUGINS:"; cat ~/.config/fish/fish_plugins; echo "----"; fisher update' \
+    2>&1 | tee -a "$LOG_FILE"
 
     warning "Não foi possível atualizar todos os plugins."
 
