@@ -26,6 +26,9 @@
 #   1) Zsh
 #   2) Fish
 #
+# LOG:
+#   /var/log/preparacao_sistemas_operacionais/
+#
 # ============================================================
 
 
@@ -125,7 +128,11 @@ fi
 USUARIO_ATUAL="$(id -un)"
 HOME_USUARIO="$HOME"
 
-LOG_FILE="$HOME_USUARIO/preparacao_sistemas_operacionais.log"
+LOG_DIRETORIO="/var/log/preparacao_sistemas_operacionais"
+
+DATA_EXECUCAO="$(date '+%Y-%m-%d_%H-%M-%S')"
+
+LOG_FILE="$LOG_DIRETORIO/$DATA_EXECUCAO.log"
 
 MARCADOR_ETAPA1="$HOME_USUARIO/.sistemas_operacionais_etapa1"
 MARCADOR_ETAPA2="$HOME_USUARIO/.sistemas_operacionais_etapa2"
@@ -152,12 +159,61 @@ fi
 
 
 # ============================================================
+# AUTENTICAÇÃO DO SUDO
+# ============================================================
+
+title "AUTENTICAÇÃO DO SUDO"
+
+info "O script precisa de privilégios administrativos."
+info "Digite sua senha quando o sudo solicitar."
+info "A senha não será armazenada pelo script."
+
+echo
+
+
+if ! sudo -v </dev/tty; then
+
+    error "Não foi possível autenticar com sudo."
+
+    exit 1
+
+fi
+
+
+success "Sudo autenticado."
+
+
+# ============================================================
 # LOG
 # ============================================================
 
-touch "$LOG_FILE" 2>/dev/null
+# ------------------------------------------------------------
+# CRIAR DIRETÓRIO DE LOG
+# ------------------------------------------------------------
 
-if [ $? -ne 0 ]; then
+if [ ! -d "$LOG_DIRETORIO" ]; then
+
+    info "Criando diretório de logs:"
+    info "$LOG_DIRETORIO"
+
+
+    if ! sudo mkdir -p "$LOG_DIRETORIO"; then
+
+        error "Não foi possível criar o diretório de logs:"
+        error "$LOG_DIRETORIO"
+
+        exit 1
+
+    fi
+
+fi
+
+
+# ------------------------------------------------------------
+# CRIAR ARQUIVO DE LOG
+# ------------------------------------------------------------
+
+if ! sudo touch "$LOG_FILE"; then
 
     error "Não foi possível criar o arquivo de log:"
     error "$LOG_FILE"
@@ -167,8 +223,41 @@ if [ $? -ne 0 ]; then
 fi
 
 
+# ------------------------------------------------------------
+# ALTERAR PROPRIETÁRIO
+# ------------------------------------------------------------
+
+if ! sudo chown "$USUARIO_ATUAL:$USUARIO_ATUAL" "$LOG_FILE"; then
+
+    error "Não foi possível alterar o proprietário do arquivo de log:"
+    error "$LOG_FILE"
+
+    exit 1
+
+fi
+
+
+# ------------------------------------------------------------
+# CONFIGURAR PERMISSÕES
+# ------------------------------------------------------------
+
+if ! chmod 640 "$LOG_FILE"; then
+
+    error "Não foi possível configurar as permissões do log."
+
+    exit 1
+
+fi
+
+
+# ------------------------------------------------------------
+# FUNÇÃO DE REGISTRO
+# ------------------------------------------------------------
+
 registrar() {
+
     echo "$*" | tee -a "$LOG_FILE"
+
 }
 
 
@@ -179,6 +268,12 @@ registrar "Usuário: $USUARIO_ATUAL"
 registrar "Data: $(date)"
 registrar "============================================================"
 registrar ""
+registrar "Arquivo de log: $LOG_FILE"
+registrar ""
+
+
+success "Log criado em:"
+success "$LOG_FILE"
 
 
 # ============================================================
@@ -281,31 +376,6 @@ for comando in apt-get dpkg sudo; do
     fi
 
 done
-
-
-# ============================================================
-# AUTENTICAÇÃO DO SUDO
-# ============================================================
-
-title "AUTENTICAÇÃO DO SUDO"
-
-info "O script precisa de privilégios administrativos."
-info "Digite sua senha quando o sudo solicitar."
-info "A senha não será armazenada pelo script."
-
-echo
-
-
-if ! sudo -v </dev/tty; then
-
-    error "Não foi possível autenticar com sudo."
-
-    exit 1
-
-fi
-
-
-success "Sudo autenticado."
 
 
 # ============================================================
@@ -1625,20 +1695,12 @@ perguntar_reconfigurar_tide() {
     local resposta
 
 
-    # --------------------------------------------------------
-    # VERIFICAR FISH
-    # --------------------------------------------------------
-
     if ! command -v fish >/dev/null 2>&1; then
 
         return 0
 
     fi
 
-
-    # --------------------------------------------------------
-    # VERIFICAR TIDE
-    # --------------------------------------------------------
 
     if ! fish -c 'type -q tide' >/dev/null 2>&1; then
 
@@ -2397,6 +2459,11 @@ echo
 
 echo "  Log:"
 echo "    $LOG_FILE"
+
+echo
+
+echo "  Diretório de logs:"
+echo "    $LOG_DIRETORIO"
 
 echo
 
