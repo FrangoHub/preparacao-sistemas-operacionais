@@ -92,7 +92,7 @@ Durante a execução, o script solicitará confirmação antes de iniciar as eta
 Também é possível baixar e executar o script diretamente do GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/FrangoHub/preparacao-sistemas-operacionais/main/preparar_so.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FrangoHub/preparacao-sistemas-operacionais/main/instalar.sh | bash
 ```
 
 ## Logs
