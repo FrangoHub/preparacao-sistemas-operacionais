@@ -988,7 +988,8 @@ executar_etapa2() {
             2>&1 | tee -a "$LOG_FILE"; then
 
             success "cool-retro-term instalado."
-
+[INFO] Atualizando plugins do Fish...
+fisher: Plugin not installed: "#"
         else
 
             warning "Não foi possível instalar cool-retro-term."
@@ -1035,7 +1036,8 @@ executar_etapa2() {
     verificar_comando emacs
     verificar_comando figlet
     verificar_comando lolcat
-    verificar_comando terminator
+    verificar_comando terminator[INFO] Atualizando plugins do Fish...
+fisher: Plugin not installed: "#"
     verificar_comando snap
 
 
@@ -1461,17 +1463,36 @@ executar_etapa4() {
     fi
 
 
-    # ========================================================
-    # FISHER UPDATE
-    # ========================================================
+# ========================================================
+# FISHER UPDATE
+# ========================================================
 
-    info "Atualizando plugins do Fish..."
+info "Atualizando plugins do Fish..."
+
+FISH_PLUGINS="$HOME_USUARIO/.config/fish/fish_plugins"
+
+if [ -f "$FISH_PLUGINS" ]; then
+
+    # Remove comentários e linhas vazias que podem ser
+    # interpretados pelo Fisher como nomes de plugins.
+    sed -i \
+        -e '/^[[:space:]]*#/d' \
+        -e '/^[[:space:]]*$/d' \
+        "$FISH_PLUGINS"
+
+fi
 
 
-    fish -c 'fisher update' \
-        2>&1 | tee -a "$LOG_FILE" || \
-        warning "Não foi possível atualizar todos os plugins."
+if fish -c 'fisher update' \
+    2>&1 | tee -a "$LOG_FILE"; then
 
+    success "Plugins do Fish atualizados."
+
+else
+
+    warning "Não foi possível atualizar todos os plugins."
+
+fi
 
     # ========================================================
     # VERIFICAÇÕES
@@ -2317,4 +2338,3 @@ echo "  Terminal padrão do sistema + Zsh"
 echo
 
 success "Script finalizado."
-
