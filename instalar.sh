@@ -134,6 +134,7 @@ MARCADOR_ETAPA4="$HOME_USUARIO/.sistemas_operacionais_etapa4"
 
 ZSHRC="$HOME_USUARIO/.zshrc"
 FISH_CONFIG="$HOME_USUARIO/.config/fish/config.fish"
+FISH_PLUGINS="$HOME_USUARIO/.config/fish/fish_plugins"
 
 
 # ============================================================
@@ -613,6 +614,37 @@ adicionar_fish() {
         info "Adicionado ao config.fish: $linha"
 
     fi
+
+}
+
+
+# ============================================================
+# LIMPAR LISTA DE PLUGINS DO FISH
+# ============================================================
+
+limpar_fish_plugins() {
+
+    mkdir -p "$HOME_USUARIO/.config/fish"
+
+
+    if [ ! -f "$FISH_PLUGINS" ]; then
+
+        touch "$FISH_PLUGINS"
+
+        return 0
+
+    fi
+
+
+    # Fisher interpreta linhas contendo apenas "#" como
+    # nomes de plugins. Removemos comentários e linhas vazias.
+    sed -i \
+        -e '/^[[:space:]]*#/d' \
+        -e '/^[[:space:]]*$/d' \
+        "$FISH_PLUGINS"
+
+
+    return 0
 
 }
 
@@ -1161,6 +1193,10 @@ executar_etapa4() {
     MESLO_INSTALADA=0
 
 
+    # --------------------------------------------------------
+    # PROCURAR MESLO
+    # --------------------------------------------------------
+
     if find \
         "$HOME_USUARIO/.local/share/fonts" \
         "$HOME_USUARIO/.fonts" \
@@ -1176,6 +1212,10 @@ executar_etapa4() {
 
     fi
 
+
+    # --------------------------------------------------------
+    # INSTALAR MESLO
+    # --------------------------------------------------------
 
     if [ "$MESLO_INSTALADA" -eq 0 ]; then
 
@@ -1205,6 +1245,10 @@ executar_etapa4() {
         fi
 
 
+        # ----------------------------------------------------
+        # VERIFICAR UNZIP
+        # ----------------------------------------------------
+
         if ! command -v unzip >/dev/null 2>&1; then
 
             info "Instalando unzip..."
@@ -1213,6 +1257,10 @@ executar_etapa4() {
 
         fi
 
+
+        # ----------------------------------------------------
+        # EXTRAIR
+        # ----------------------------------------------------
 
         info "Extraindo Meslo Nerd Font..."
 
@@ -1350,14 +1398,42 @@ executar_etapa4() {
 
 
     # --------------------------------------------------------
-    # ALIAS CAT NO FISH
+    # CAT -> BATCAT NO FISH
     # --------------------------------------------------------
 
     if command -v batcat >/dev/null 2>&1; then
 
-        adicionar_fish 'alias cat="batcat"'
+        mkdir -p "$HOME_USUARIO/.config/fish"
 
-        success 'Alias "cat" -> "batcat" configurado no Fish.'
+        touch "$FISH_CONFIG"
+
+
+        # Remove o antigo alias caso uma versão anterior
+        # do script tenha criado essa configuração.
+        sed -i \
+            '/^[[:space:]]*alias cat="batcat"[[:space:]]*$/d' \
+            "$FISH_CONFIG"
+
+
+        # Adiciona a função somente se ela ainda não existir.
+        if ! grep -q '^function cat$' "$FISH_CONFIG" 2>/dev/null; then
+
+            cat >> "$FISH_CONFIG" <<'EOF'
+
+# cat usando batcat
+function cat
+    batcat $argv
+end
+
+EOF
+
+            success 'Função "cat" -> "batcat" adicionada ao Fish.'
+
+        else
+
+            info 'Função "cat" -> "batcat" já está configurada.'
+
+        fi
 
     else
 
@@ -1436,6 +1512,31 @@ executar_etapa4() {
 
 
     # ========================================================
+    # LIMPAR FISH_PLUGINS
+    # ========================================================
+
+    title "PREPARANDO PLUGINS DO FISH"
+
+
+    limpar_fish_plugins
+
+
+    # --------------------------------------------------------
+    # MOSTRAR PLUGINS ENCONTRADOS
+    # --------------------------------------------------------
+
+    if [ -f "$FISH_PLUGINS" ]; then
+
+        info "Plugins registrados no Fish:"
+
+        cat "$FISH_PLUGINS" | tee -a "$LOG_FILE"
+
+        echo
+
+    fi
+
+
+    # ========================================================
     # FISHER UPDATE
     # ========================================================
 
@@ -1496,13 +1597,13 @@ executar_etapa4() {
 
 
     if [ -f "$FISH_CONFIG" ] &&
-       grep -Fqx 'alias cat="batcat"' "$FISH_CONFIG" 2>/dev/null; then
+       grep -q '^function cat$' "$FISH_CONFIG" 2>/dev/null; then
 
-        success 'Alias "cat" -> "batcat" verificado no Fish.'
+        success 'Função "cat" -> "batcat" verificada no Fish.'
 
     else
 
-        warning 'Alias "cat" -> "batcat" não foi encontrado no Fish.'
+        warning 'A função "cat" -> "batcat" não foi encontrada no Fish.'
 
     fi
 
@@ -1524,12 +1625,20 @@ perguntar_reconfigurar_tide() {
     local resposta
 
 
+    # --------------------------------------------------------
+    # VERIFICAR FISH
+    # --------------------------------------------------------
+
     if ! command -v fish >/dev/null 2>&1; then
 
         return 0
 
     fi
 
+
+    # --------------------------------------------------------
+    # VERIFICAR TIDE
+    # --------------------------------------------------------
 
     if ! fish -c 'type -q tide' >/dev/null 2>&1; then
 
@@ -1926,7 +2035,9 @@ escolher_terminal_grafico() {
 
     local escolha
 
+
     title "ESCOLHA DO TERMINAL GRÁFICO PADRÃO"
+
 
     echo "Escolha qual aplicativo será utilizado como terminal gráfico:"
     echo
@@ -1935,12 +2046,14 @@ escolher_terminal_grafico() {
     echo "  3) Ghostty"
     echo
 
+
     while true; do
 
         read -r \
             -p "Digite 1, 2 ou 3: " \
             escolha \
             </dev/tty
+
 
         case "$escolha" in
 
@@ -1951,6 +2064,7 @@ escolher_terminal_grafico() {
                 return 0
 
                 ;;
+
 
             2)
 
@@ -1963,13 +2077,17 @@ escolher_terminal_grafico() {
 
                 fi
 
+
                 TERMINAL_GRAFICO="terminator"
 
+
                 configurar_terminal_grafico "terminator"
+
 
                 return 0
 
                 ;;
+
 
             3)
 
@@ -1990,11 +2108,14 @@ escolher_terminal_grafico() {
 
                 fi
 
+
                 configurar_terminal_grafico "ghostty"
+
 
                 return 0
 
                 ;;
+
 
             *)
 
@@ -2027,11 +2148,13 @@ alterar_shell_padrao() {
 
             ;;
 
+
         fish)
 
             shell_caminho="$(command -v fish 2>/dev/null || true)"
 
             ;;
+
 
         *)
 
@@ -2055,16 +2178,21 @@ alterar_shell_padrao() {
 
     title "ALTERANDO SHELL PADRÃO"
 
+
     info "Shell escolhido: $shell_nome"
     info "Caminho: $shell_caminho"
 
 
+    # --------------------------------------------------------
     # /etc/shells
+    # --------------------------------------------------------
+
     if ! grep -Fxq "$shell_caminho" /etc/shells 2>/dev/null; then
 
         info "Adicionando shell ao /etc/shells..."
 
         atualizar_sudo
+
 
         if ! printf '%s\n' "$shell_caminho" \
             | sudo tee -a /etc/shells >/dev/null; then
@@ -2078,7 +2206,10 @@ alterar_shell_padrao() {
     fi
 
 
+    # --------------------------------------------------------
     # CHSH
+    # --------------------------------------------------------
+
     atualizar_sudo
 
 
@@ -2098,7 +2229,10 @@ alterar_shell_padrao() {
     fi
 
 
+    # --------------------------------------------------------
     # VERIFICAR
+    # --------------------------------------------------------
+
     shell_atual="$(getent passwd "$USUARIO_ATUAL" | cut -d: -f7)"
 
 
