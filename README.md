@@ -76,13 +76,13 @@ cd preparacao-sistemas-operacionais
 Dê permissão de execução ao script:
 
 ```bash
-chmod +x preparar_so.sh
+chmod +x instalar.sh
 ```
 
 Execute:
 
 ```bash
-./preparar_so.sh
+./instalar.sh
 ```
 
 Durante a execução, o script solicitará confirmação antes de iniciar as etapas que possuem instalações adicionais.
