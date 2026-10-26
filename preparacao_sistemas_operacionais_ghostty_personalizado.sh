@@ -1,0 +1,2618 @@
+#!/usr/bin/env bash
+
+# ============================================================
+# PREPARAÇÃO DE SISTEMAS OPERACIONAIS
+# ============================================================
+#
+# Compatível com:
+#   Ubuntu
+#   Debian
+#   Linux Mint
+#   Pop!_OS
+#
+# ETAPA 1 - Zsh + Oh My Zsh
+# ETAPA 2 - Aplicativos + Snap + Neovim
+# ETAPA 3 - Ferramentas finais
+# ETAPA 4 - Nerd Font Meslo + Ghostty (.deb) + Fish + Tide
+#
+# NO FINAL:
+#
+# Terminal gráfico:
+#   1) Terminal padrão do sistema
+#   2) Terminator
+#   3) Ghostty
+#
+# Shell:
+#   1) Zsh
+#   2) Fish
+#
+# LOG:
+#   /var/log/preparacao_sistemas_operacionais/
+#
+# ============================================================
+
+
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+set -o pipefail
+
+
+# ============================================================
+# CORES
+# ============================================================
+
+RESET='\033[0m'
+BOLD='\033[1m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+RED='\033[31m'
+BLUE='\033[34m'
+CYAN='\033[36m'
+
+
+# ============================================================
+# FUNÇÕES DE MENSAGEM
+# ============================================================
+
+info() {
+    echo -e "${BLUE}[INFO]${RESET} $*"
+}
+
+success() {
+    echo -e "${GREEN}[OK]${RESET} $*"
+}
+
+warning() {
+    echo -e "${YELLOW}[AVISO]${RESET} $*"
+}
+
+error() {
+    echo -e "${RED}[ERRO]${RESET} $*"
+}
+
+title() {
+    echo
+    echo -e "${CYAN}${BOLD}============================================================${RESET}"
+    echo -e "${CYAN}${BOLD}$*${RESET}"
+    echo -e "${CYAN}${BOLD}============================================================${RESET}"
+    echo
+}
+
+
+# ============================================================
+# VERIFICAR BASH
+# ============================================================
+
+if [ -z "${BASH_VERSION:-}" ]; then
+
+    error "Este script precisa ser executado com Bash."
+
+    echo
+    echo "Execute usando:"
+    echo
+    echo "  curl -fsSL URL | bash"
+    echo
+    echo "ou:"
+    echo
+    echo "  bash preparacao_sistemas_operacionais.sh"
+    echo
+
+    exit 1
+
+fi
+
+
+# ============================================================
+# NÃO EXECUTAR COMO ROOT
+# ============================================================
+
+if [ "$(id -u)" -eq 0 ]; then
+
+    error "Não execute este script como root."
+
+    echo
+    echo "Execute como seu usuário normal."
+    echo
+
+    exit 1
+
+fi
+
+
+# ============================================================
+# VARIÁVEIS
+# ============================================================
+
+USUARIO_ATUAL="$(id -un)"
+HOME_USUARIO="$HOME"
+
+LOG_DIRETORIO="/var/log/preparacao_sistemas_operacionais"
+
+DATA_EXECUCAO="$(date '+%Y-%m-%d_%H-%M-%S')"
+
+LOG_FILE="$LOG_DIRETORIO/$DATA_EXECUCAO.log"
+
+MARCADOR_ETAPA1="$HOME_USUARIO/.sistemas_operacionais_etapa1"
+MARCADOR_ETAPA2="$HOME_USUARIO/.sistemas_operacionais_etapa2"
+MARCADOR_ETAPA3="$HOME_USUARIO/.sistemas_operacionais_etapa3"
+MARCADOR_ETAPA4="$HOME_USUARIO/.sistemas_operacionais_etapa4"
+
+ZSHRC="$HOME_USUARIO/.zshrc"
+FISH_CONFIG="$HOME_USUARIO/.config/fish/config.fish"
+FISH_PLUGINS="$HOME_USUARIO/.config/fish/fish_plugins"
+
+# Inicializadas vazias para evitar referências indefinidas no resumo final
+TERMINAL_GRAFICO=""
+SHELL_PADRAO=""
+
+
+# ============================================================
+# VERIFICAR /dev/tty
+# ============================================================
+
+if [ ! -r /dev/tty ]; then
+
+    error "Não foi possível acessar /dev/tty."
+    error "O script precisa ser executado em um terminal."
+
+    exit 1
+
+fi
+
+
+# ============================================================
+# AUTENTICAÇÃO DO SUDO
+# ============================================================
+
+title "AUTENTICAÇÃO DO SUDO"
+
+info "O script precisa de privilégios administrativos."
+info "Digite sua senha quando o sudo solicitar."
+info "A senha não será armazenada pelo script."
+
+echo
+
+
+if ! sudo -v </dev/tty; then
+
+    error "Não foi possível autenticar com sudo."
+
+    exit 1
+
+fi
+
+
+success "Sudo autenticado."
+
+
+# ============================================================
+# LOG
+# ============================================================
+
+if [ ! -d "$LOG_DIRETORIO" ]; then
+
+    info "Criando diretório de logs:"
+    info "$LOG_DIRETORIO"
+
+    if ! sudo mkdir -p "$LOG_DIRETORIO"; then
+
+        error "Não foi possível criar o diretório de logs:"
+        error "$LOG_DIRETORIO"
+
+        exit 1
+
+    fi
+
+fi
+
+
+if ! sudo touch "$LOG_FILE"; then
+
+    error "Não foi possível criar o arquivo de log:"
+    error "$LOG_FILE"
+
+    exit 1
+
+fi
+
+
+if ! sudo chown "$USUARIO_ATUAL:$USUARIO_ATUAL" "$LOG_FILE"; then
+
+    error "Não foi possível alterar o proprietário do arquivo de log:"
+    error "$LOG_FILE"
+
+    exit 1
+
+fi
+
+
+if ! chmod 640 "$LOG_FILE"; then
+
+    error "Não foi possível configurar as permissões do log."
+
+    exit 1
+
+fi
+
+
+registrar() {
+
+    echo "$*" | tee -a "$LOG_FILE"
+
+}
+
+
+registrar ""
+registrar "============================================================"
+registrar "PREPARAÇÃO DE SISTEMAS OPERACIONAIS"
+registrar "Usuário: $USUARIO_ATUAL"
+registrar "Data: $(date)"
+registrar "============================================================"
+registrar ""
+registrar "Arquivo de log: $LOG_FILE"
+registrar ""
+
+
+success "Log criado em:"
+success "$LOG_FILE"
+
+
+# ============================================================
+# IDENTIFICAR DISTRIBUIÇÃO
+# ============================================================
+
+if [ ! -f /etc/os-release ]; then
+
+    error "Não foi possível encontrar /etc/os-release."
+
+    exit 1
+
+fi
+
+
+# shellcheck disable=SC1091
+source /etc/os-release
+
+
+DISTRO_ID="${ID:-}"
+DISTRO_ID_LIKE="${ID_LIKE:-}"
+
+
+case "$DISTRO_ID" in
+
+    ubuntu)
+
+        DISTRIBUICAO="Ubuntu"
+
+        ;;
+
+    debian)
+
+        DISTRIBUICAO="Debian"
+
+        ;;
+
+    linuxmint)
+
+        DISTRIBUICAO="Linux Mint"
+
+        ;;
+
+    pop)
+
+        DISTRIBUICAO="Pop!_OS"
+
+        ;;
+
+    *)
+
+        if echo "$DISTRO_ID_LIKE" | grep -Eq 'debian|ubuntu'; then
+
+            DISTRIBUICAO="${PRETTY_NAME:-$DISTRO_ID}"
+
+            warning "Distribuição baseada em Debian/Ubuntu detectada:"
+            warning "$DISTRIBUICAO"
+
+        else
+
+            error "Distribuição não suportada:"
+            error "${PRETTY_NAME:-$DISTRO_ID}"
+
+            exit 1
+
+        fi
+
+        ;;
+
+esac
+
+
+# ============================================================
+# INFORMAÇÕES INICIAIS
+# ============================================================
+
+title "PREPARAÇÃO DE SISTEMAS OPERACIONAIS"
+
+info "Distribuição: ${PRETTY_NAME:-$DISTRIBUICAO}"
+info "Usuário: $USUARIO_ATUAL"
+info "Home: $HOME_USUARIO"
+info "Arquitetura: $(dpkg --print-architecture)"
+info "Log: $LOG_FILE"
+
+echo
+
+
+# ============================================================
+# VERIFICAR COMANDOS BÁSICOS
+# ============================================================
+
+for comando in apt-get dpkg sudo; do
+
+    if ! command -v "$comando" >/dev/null 2>&1; then
+
+        error "Comando obrigatório não encontrado: $comando"
+
+        exit 1
+
+    fi
+
+done
+
+
+# ============================================================
+# ATUALIZAR CREDENCIAL DO SUDO
+# ============================================================
+
+atualizar_sudo() {
+
+    sudo -v </dev/tty
+
+}
+
+
+# ============================================================
+# VERIFICAR PACOTE
+# ============================================================
+
+pacote_instalado() {
+
+    local pacote="$1"
+
+    dpkg-query \
+        -W \
+        -f='${Status}' \
+        "$pacote" \
+        2>/dev/null \
+        | grep -q "install ok installed"
+
+}
+
+
+# ============================================================
+# INSTALAR PACOTE
+# ============================================================
+
+instalar_pacote() {
+
+    local pacote="$1"
+
+
+    if pacote_instalado "$pacote"; then
+
+        info "$pacote já está instalado."
+
+        return 0
+
+    fi
+
+
+    info "Instalando $pacote..."
+
+
+    atualizar_sudo
+
+
+    if sudo apt-get install -y "$pacote" \
+        2>&1 | tee -a "$LOG_FILE"; then
+
+        if pacote_instalado "$pacote"; then
+
+            success "$pacote instalado."
+
+            return 0
+
+        else
+
+            error "$pacote não foi encontrado após a instalação."
+
+            return 1
+
+        fi
+
+    else
+
+        error "Falha ao instalar $pacote."
+
+        return 1
+
+    fi
+
+}
+
+
+# ============================================================
+# ATUALIZAR REPOSITÓRIOS
+# ============================================================
+
+atualizar_repositorios() {
+
+    info "Atualizando repositórios APT..."
+
+
+    atualizar_sudo
+
+
+    if sudo apt-get update \
+        2>&1 | tee -a "$LOG_FILE"; then
+
+        success "Repositórios atualizados."
+
+        return 0
+
+    else
+
+        error "Falha ao atualizar os repositórios."
+
+        return 1
+
+    fi
+
+}
+
+
+# ============================================================
+# VERIFICAR COMANDO
+# ============================================================
+
+verificar_comando() {
+
+    local comando="$1"
+
+
+    if command -v "$comando" >/dev/null 2>&1; then
+
+        success "Comando encontrado: $comando"
+
+        return 0
+
+    else
+
+        warning "Comando não encontrado: $comando"
+
+        return 1
+
+    fi
+
+}
+
+
+# ============================================================
+# CONFIRMAR ETAPA
+# ============================================================
+
+confirmar_etapa() {
+
+    local numero="$1"
+    local descricao="$2"
+    local resposta
+
+
+    echo
+    echo -e "${BOLD}Etapa $numero - $descricao${RESET}"
+    echo
+
+
+    while true; do
+
+        read -r \
+            -p "Deseja executar esta etapa? [S/n]: " \
+            resposta \
+            </dev/tty
+
+
+        case "$resposta" in
+
+            "")
+
+                return 0
+
+                ;;
+
+            S|s|SIM|sim|Sim)
+
+                return 0
+
+                ;;
+
+            N|n|NAO|nao|Nao|NÃO|não)
+
+                return 1
+
+                ;;
+
+            *)
+
+                warning "Digite S para sim ou N para não."
+
+                ;;
+
+        esac
+
+    done
+
+}
+
+
+# ============================================================
+# CONFIRMAR REEXECUÇÃO DA ETAPA
+# ============================================================
+
+confirmar_reexecucao_etapa() {
+
+    local numero="$1"
+    local descricao="$2"
+    local marcador="$3"
+    local resposta
+
+
+    if [ ! -f "$marcador" ]; then
+
+        confirmar_etapa "$numero" "$descricao"
+
+        return $?
+
+    fi
+
+
+    echo
+    echo -e "${BOLD}Etapa $numero - $descricao${RESET}"
+    echo
+
+    success "Esta etapa já foi concluída anteriormente."
+
+    echo
+
+
+    while true; do
+
+        read -r \
+            -p "Deseja executar esta etapa novamente? [s/N]: " \
+            resposta \
+            </dev/tty
+
+
+        case "$resposta" in
+
+            S|s|SIM|sim|Sim)
+
+                return 0
+
+                ;;
+
+            ""|N|n|NAO|nao|Nao|NÃO|não)
+
+                return 1
+
+                ;;
+
+            *)
+
+                warning "Digite S para sim ou N para não."
+
+                ;;
+
+        esac
+
+    done
+
+}
+
+
+# ============================================================
+# ADICIONAR LINHA AO ZSHRC
+# ============================================================
+
+adicionar_zshrc() {
+
+    local linha="$1"
+
+
+    touch "$ZSHRC"
+
+
+    if ! grep -Fqx "$linha" "$ZSHRC" 2>/dev/null; then
+
+        echo "$linha" >> "$ZSHRC"
+
+        info "Adicionado ao .zshrc: $linha"
+
+    fi
+
+}
+
+
+# ============================================================
+# ADICIONAR LINHA AO FISH
+# ============================================================
+
+adicionar_fish() {
+
+    local linha="$1"
+
+
+    mkdir -p "$HOME_USUARIO/.config/fish"
+
+
+    touch "$FISH_CONFIG"
+
+
+    if ! grep -Fqx "$linha" "$FISH_CONFIG" 2>/dev/null; then
+
+        echo "$linha" >> "$FISH_CONFIG"
+
+        info "Adicionado ao config.fish: $linha"
+
+    fi
+
+}
+
+
+# ============================================================
+# LIMPAR LISTA DE PLUGINS DO FISH
+# ============================================================
+
+limpar_fish_plugins() {
+
+    mkdir -p "$HOME_USUARIO/.config/fish"
+
+
+    # Não cria o arquivo se ele não existir: o Fisher gerencia
+    # esse arquivo e um arquivo vazio pode causar confusão.
+    if [ ! -f "$FISH_PLUGINS" ]; then
+
+        return 0
+
+    fi
+
+
+    # Fisher interpreta linhas contendo apenas "#" como
+    # nomes de plugins. Removemos comentários e linhas vazias.
+    sed -i \
+        -e '/^[[:space:]]*#/d' \
+        -e '/^[[:space:]]*$/d' \
+        "$FISH_PLUGINS"
+
+
+    return 0
+
+}
+
+
+# ============================================================
+# ETAPA 1
+# ============================================================
+
+executar_etapa1() {
+
+    title "ETAPA 1 - ZSH E OH MY ZSH"
+
+
+    if ! confirmar_reexecucao_etapa \
+        1 \
+        "Zsh + Oh My Zsh" \
+        "$MARCADOR_ETAPA1"; then
+
+        warning "Etapa 1 ignorada."
+
+        return 0
+
+    fi
+
+
+    atualizar_repositorios || return 1
+
+
+    instalar_pacote zsh || return 1
+    instalar_pacote curl || return 1
+    instalar_pacote git || return 1
+    instalar_pacote fonts-powerline || return 1
+    instalar_pacote nano || return 1
+
+
+    # --------------------------------------------------------
+    # OH MY ZSH
+    # --------------------------------------------------------
+
+    if [ -d "$HOME_USUARIO/.oh-my-zsh" ]; then
+
+        success "Oh My Zsh já está instalado."
+
+    else
+
+        info "Instalando Oh My Zsh..."
+
+
+        if RUNZSH=no CHSH=no sh -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Oh My Zsh instalado."
+
+        else
+
+            error "Falha ao instalar Oh My Zsh."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # BACKUP
+    # --------------------------------------------------------
+
+    if [ -f "$ZSHRC" ] &&
+       [ ! -f "$ZSHRC.etapa1.backup" ]; then
+
+        cp "$ZSHRC" "$ZSHRC.etapa1.backup"
+
+        success "Backup do .zshrc criado."
+
+    fi
+
+
+    # --------------------------------------------------------
+    # ZSHRC
+    # --------------------------------------------------------
+
+    touch "$ZSHRC"
+
+
+    if grep -q '^ZSH_THEME=' "$ZSHRC"; then
+
+        sed -i \
+            's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' \
+            "$ZSHRC"
+
+    else
+
+        echo 'ZSH_THEME="agnoster"' >> "$ZSHRC"
+
+    fi
+
+
+    success "Tema Agnoster configurado."
+
+
+    # --------------------------------------------------------
+    # VERIFICAÇÕES
+    # --------------------------------------------------------
+
+    verificar_comando zsh
+    verificar_comando curl
+    verificar_comando git
+
+
+    touch "$MARCADOR_ETAPA1"
+
+
+    success "Etapa 1 concluída."
+
+}
+
+
+# ============================================================
+# ETAPA 2
+# ============================================================
+
+executar_etapa2() {
+
+    title "ETAPA 2 - APLICATIVOS, SNAP E NEOVIM"
+
+
+    if ! confirmar_reexecucao_etapa \
+        2 \
+        "Aplicativos + Snap + Neovim" \
+        "$MARCADOR_ETAPA2"; then
+
+        warning "Etapa 2 ignorada."
+
+        return 0
+
+    fi
+
+
+    # --------------------------------------------------------
+    # LINUX MINT / SNAP
+    # --------------------------------------------------------
+
+    if [ "$DISTRO_ID" = "linuxmint" ]; then
+
+        if [ -f "/etc/apt/preferences.d/nosnap.pref" ]; then
+
+            warning "Linux Mint detectado."
+            warning "Removendo bloqueio do Snap."
+
+
+            atualizar_sudo
+
+
+            sudo cp \
+                "/etc/apt/preferences.d/nosnap.pref" \
+                "/etc/apt/preferences.d/nosnap.pref.backup" \
+                2>&1 | tee -a "$LOG_FILE"
+
+
+            sudo rm \
+                "/etc/apt/preferences.d/nosnap.pref" \
+                2>&1 | tee -a "$LOG_FILE"
+
+
+            success "Bloqueio do Snap removido."
+
+
+            atualizar_repositorios || return 1
+
+        fi
+
+    fi
+
+
+    atualizar_repositorios || return 1
+
+
+    # --------------------------------------------------------
+    # PACOTES APT
+    # --------------------------------------------------------
+
+    instalar_pacote emacs || return 1
+    instalar_pacote figlet || return 1
+    instalar_pacote lolcat || return 1
+    instalar_pacote ksudoku || return 1
+    instalar_pacote terminator || return 1
+    instalar_pacote snapd || return 1
+    instalar_pacote git || return 1
+
+
+    # --------------------------------------------------------
+    # FIGLET FONTS
+    # --------------------------------------------------------
+
+    if [ -d "$HOME_USUARIO/figlet-fonts" ]; then
+
+        success "figlet-fonts já está presente."
+
+    else
+
+        info "Baixando figlet-fonts..."
+
+
+        if git clone \
+            https://github.com/xero/figlet-fonts.git \
+            "$HOME_USUARIO/figlet-fonts" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "figlet-fonts instalado."
+
+        else
+
+            warning "Não foi possível baixar figlet-fonts."
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # FIGLET NO ZSHRC
+    # --------------------------------------------------------
+
+    FIGLET_LINHA='figlet "OHMYZSH!" -f "3d" -d "$HOME/figlet-fonts/" | lolcat'
+
+
+    if ! grep -Fqx "$FIGLET_LINHA" "$ZSHRC" 2>/dev/null; then
+
+        echo "$FIGLET_LINHA" >> "$ZSHRC"
+
+        success "Banner do Figlet adicionado ao .zshrc."
+
+    fi
+
+
+    # --------------------------------------------------------
+    # SNAPD
+    # --------------------------------------------------------
+
+    if command -v snap >/dev/null 2>&1; then
+
+        info "Configurando snapd..."
+
+
+        atualizar_sudo
+
+
+        sudo systemctl enable --now snapd.socket \
+            2>&1 | tee -a "$LOG_FILE"
+
+
+        sleep 3
+
+    else
+
+        error "snap não está disponível."
+
+        return 1
+
+    fi
+
+
+    # ========================================================
+    # NEOVIM
+    # ========================================================
+
+    title "INSTALANDO NEOVIM + KICKSTART.NVIM"
+
+
+    if snap list nvim >/dev/null 2>&1; then
+
+        success "Neovim já está instalado."
+
+    else
+
+        info "Instalando Neovim pelo Snap..."
+
+        atualizar_sudo
+
+
+        if sudo snap install nvim --classic \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Neovim instalado."
+
+        else
+
+            error "Falha ao instalar Neovim."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # KICKSTART.NVIM
+    # --------------------------------------------------------
+
+    mkdir -p "$HOME_USUARIO/config"
+
+
+    if [ -d "$HOME_USUARIO/config/nvim/.git" ]; then
+
+        success "Kickstart.nvim já está instalado."
+
+        info "Local: $HOME_USUARIO/config/nvim"
+
+    elif [ -e "$HOME_USUARIO/config/nvim" ]; then
+
+        warning "O diretório $HOME_USUARIO/config/nvim já existe."
+
+        warning "Ele não parece ser um repositório Git."
+
+        warning "O script não irá sobrescrever esse diretório."
+
+    else
+
+        info "Clonando Kickstart.nvim..."
+
+
+        if git clone \
+            https://github.com/nvim-lua/kickstart.nvim.git \
+            "$HOME_USUARIO/config/nvim" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Kickstart.nvim instalado."
+
+        else
+
+            error "Falha ao clonar Kickstart.nvim."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # COOL RETRO TERM
+    # --------------------------------------------------------
+
+    if snap list cool-retro-term >/dev/null 2>&1; then
+
+        success "cool-retro-term já está instalado."
+
+    else
+
+        info "Instalando cool-retro-term..."
+
+
+        atualizar_sudo
+
+
+        if sudo snap install cool-retro-term --classic \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "cool-retro-term instalado."
+
+        else
+
+            warning "Não foi possível instalar cool-retro-term."
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # MARIO
+    # --------------------------------------------------------
+
+    if snap list mari0 >/dev/null 2>&1; then
+
+        success "mari0 já está instalado."
+
+    else
+
+        info "Instalando mari0..."
+
+
+        atualizar_sudo
+
+
+        if sudo snap install mari0 \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "mari0 instalado."
+
+        else
+
+            warning "Não foi possível instalar mari0."
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # VERIFICAÇÕES
+    # --------------------------------------------------------
+
+    verificar_comando emacs
+    verificar_comando figlet
+    verificar_comando lolcat
+    verificar_comando terminator
+    verificar_comando snap
+
+
+    if command -v nvim >/dev/null 2>&1; then
+
+        success "Neovim verificado."
+
+    elif [ -x /snap/bin/nvim ]; then
+
+        success "Neovim verificado em /snap/bin/nvim."
+
+    else
+
+        warning "Neovim não pôde ser verificado."
+
+    fi
+
+
+    if [ -d "$HOME_USUARIO/config/nvim/.git" ]; then
+
+        success "Kickstart.nvim verificado."
+
+    else
+
+        warning "Kickstart.nvim não pôde ser verificado."
+
+    fi
+
+
+    touch "$MARCADOR_ETAPA2"
+
+
+    success "Etapa 2 concluída."
+
+}
+
+
+# ============================================================
+# ETAPA 3
+# ============================================================
+
+executar_etapa3() {
+
+    title "ETAPA 3 - FERRAMENTAS"
+
+
+    if ! confirmar_reexecucao_etapa \
+        3 \
+        "Ferramentas finais" \
+        "$MARCADOR_ETAPA3"; then
+
+        warning "Etapa 3 ignorada."
+
+        return 0
+
+    fi
+
+
+    atualizar_repositorios || return 1
+
+
+    instalar_pacote neofetch || return 1
+    instalar_pacote jq || return 1
+    instalar_pacote bat || return 1
+
+
+    # --------------------------------------------------------
+    # ALIAS CAT NO ZSH
+    # --------------------------------------------------------
+
+    if command -v batcat >/dev/null 2>&1; then
+
+        adicionar_zshrc 'alias cat="batcat"'
+
+        success 'Alias "cat" -> "batcat" configurado no Zsh.'
+
+    fi
+
+
+    # --------------------------------------------------------
+    # VERIFICAÇÕES
+    # --------------------------------------------------------
+
+    verificar_comando neofetch
+    verificar_comando jq
+    verificar_comando batcat
+
+
+    touch "$MARCADOR_ETAPA3"
+
+
+    success "Etapa 3 concluída."
+
+}
+
+
+# ============================================================
+# ETAPA 4
+# ============================================================
+
+executar_etapa4() {
+
+    title "ETAPA 4 - GHOSTTY + FISH + TIDE"
+
+
+    if ! confirmar_reexecucao_etapa \
+        4 \
+        "Ghostty + Fish + Tide" \
+        "$MARCADOR_ETAPA4"; then
+
+        warning "Etapa 4 ignorada."
+
+        return 0
+
+    fi
+
+
+    atualizar_repositorios || return 1
+
+
+    instalar_pacote curl || return 1
+    instalar_pacote fish || return 1
+
+
+    # ========================================================
+    # NERD FONT MESLO
+    # ========================================================
+
+    title "INSTALANDO NERD FONT MESLO"
+
+
+    DIRETORIO_FONTES="$HOME_USUARIO/.local/share/fonts/NerdFonts"
+
+
+    MESLO_INSTALADA=0
+
+
+    # --------------------------------------------------------
+    # PROCURAR MESLO
+    # --------------------------------------------------------
+
+    if find \
+        "$HOME_USUARIO/.local/share/fonts" \
+        "$HOME_USUARIO/.fonts" \
+        /usr/local/share/fonts \
+        /usr/share/fonts \
+        -type f \
+        \( -iname 'Meslo*.ttf' -o -iname 'Meslo*.otf' \) \
+        2>/dev/null | grep -q .; then
+
+        MESLO_INSTALADA=1
+
+        success "Meslo Nerd Font já está instalada."
+
+    fi
+
+
+    # --------------------------------------------------------
+    # INSTALAR MESLO
+    # --------------------------------------------------------
+
+    if [ "$MESLO_INSTALADA" -eq 0 ]; then
+
+        info "Baixando Meslo Nerd Font..."
+
+
+        ARQUIVO_MESLO="$HOME_USUARIO/.cache/preparacao_sistemas_operacionais/Meslo.zip"
+
+
+        mkdir -p "$(dirname "$ARQUIVO_MESLO")"
+        mkdir -p "$DIRETORIO_FONTES"
+
+
+        if curl -fL \
+            https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.zip \
+            -o "$ARQUIVO_MESLO" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Meslo Nerd Font baixada."
+
+        else
+
+            error "Não foi possível baixar a Meslo Nerd Font."
+
+            return 1
+
+        fi
+
+
+        # ----------------------------------------------------
+        # VERIFICAR UNZIP
+        # ----------------------------------------------------
+
+        if ! command -v unzip >/dev/null 2>&1; then
+
+            info "Instalando unzip..."
+
+            instalar_pacote unzip || return 1
+
+        fi
+
+
+        # ----------------------------------------------------
+        # EXTRAIR
+        # ----------------------------------------------------
+
+        info "Extraindo Meslo Nerd Font..."
+
+
+        if unzip \
+            -o \
+            "$ARQUIVO_MESLO" \
+            -d "$DIRETORIO_FONTES" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Meslo Nerd Font extraída."
+
+        else
+
+            error "Não foi possível extrair a Meslo Nerd Font."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # ATUALIZAR CACHE DAS FONTES
+    # --------------------------------------------------------
+
+    if command -v fc-cache >/dev/null 2>&1; then
+
+        info "Atualizando cache das fontes..."
+
+
+        if fc-cache -f \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Cache das fontes atualizado."
+
+        else
+
+            warning "Não foi possível atualizar completamente o cache das fontes."
+
+        fi
+
+    else
+
+        warning "fc-cache não está disponível."
+
+    fi
+
+
+    # --------------------------------------------------------
+    # VERIFICAÇÃO REAL DA MESLO
+    # --------------------------------------------------------
+
+    if command -v fc-list >/dev/null 2>&1; then
+
+        if fc-list 2>/dev/null | grep -i "Meslo" >/dev/null; then
+
+            success "Meslo Nerd Font detectada pelo sistema."
+
+        else
+
+            warning "A Meslo não foi detectada pelo fc-list."
+
+        fi
+
+    else
+
+        warning "O comando fc-list não está disponível."
+
+    fi
+
+
+    # ========================================================
+    # GHOSTTY
+    # ========================================================
+
+    title "INSTALANDO GHOSTTY"
+
+
+    # --------------------------------------------------------
+    # INSTALAR GHOSTTY PELO PACOTE .DEB
+    # --------------------------------------------------------
+
+    if dpkg-query -W -f='${Status}' ghostty 2>/dev/null \
+        | grep -q "install ok installed"; then
+
+        success "Ghostty .deb já está instalado."
+
+    else
+
+        info "Instalando Ghostty pela versão .deb..."
+        info "Origem: repositório mkasberg/ghostty-ubuntu"
+
+        atualizar_sudo
+
+        if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/mkasberg/ghostty-ubuntu/HEAD/install.sh)" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            if dpkg-query -W -f='${Status}' ghostty 2>/dev/null \
+                | grep -q "install ok installed"; then
+
+                success "Ghostty .deb instalado."
+
+            else
+
+                error "O instalador terminou, mas o pacote ghostty não foi encontrado no dpkg."
+                return 1
+
+            fi
+
+        else
+
+            error "Falha ao instalar Ghostty pela versão .deb."
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # REMOVER A VERSÃO SNAP DO GHOSTTY, SE EXISTIR
+    # --------------------------------------------------------
+
+    if command -v snap >/dev/null 2>&1 && snap list ghostty >/dev/null 2>&1; then
+
+        warning "Foi encontrada uma instalação Snap do Ghostty."
+        info "Removendo a versão Snap para evitar conflito com o pacote .deb..."
+
+        atualizar_sudo
+
+        if sudo snap remove ghostty 2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Versão Snap do Ghostty removida."
+
+        else
+
+            error "Não foi possível remover a versão Snap do Ghostty."
+            return 1
+
+        fi
+
+    fi
+
+
+    # ========================================================
+    # FISH
+    # ========================================================
+
+    title "CONFIGURANDO FISH"
+
+
+    if command -v fish >/dev/null 2>&1; then
+
+        success "Fish instalado."
+
+    else
+
+        instalar_pacote fish || return 1
+
+    fi
+
+
+    # --------------------------------------------------------
+    # CAT -> BATCAT NO FISH
+    # --------------------------------------------------------
+
+    if command -v batcat >/dev/null 2>&1; then
+
+        mkdir -p "$HOME_USUARIO/.config/fish"
+
+        touch "$FISH_CONFIG"
+
+
+        # Remove o antigo alias caso uma versão anterior
+        # do script tenha criado essa configuração.
+        sed -i \
+            '/^[[:space:]]*alias cat="batcat"[[:space:]]*$/d' \
+            "$FISH_CONFIG"
+
+
+        # Adiciona a função somente se ela ainda não existir.
+        if ! grep -q '^function cat$' "$FISH_CONFIG" 2>/dev/null; then
+
+            cat >> "$FISH_CONFIG" <<'EOF'
+
+# cat usando batcat
+function cat
+    batcat $argv
+end
+
+EOF
+
+            success 'Função "cat" -> "batcat" adicionada ao Fish.'
+
+        else
+
+            info 'Função "cat" -> "batcat" já está configurada.'
+
+        fi
+
+    else
+
+        warning "batcat não está instalado."
+        warning "Execute a Etapa 3 antes da Etapa 4."
+
+    fi
+
+
+    # ========================================================
+    # FISHER
+    # ========================================================
+
+    title "INSTALANDO FISHER"
+
+
+    if fish -c 'type -q fisher' >/dev/null 2>&1; then
+
+        success "Fisher já está instalado."
+
+    else
+
+        info "Instalando Fisher..."
+
+
+        if fish -c \
+            'curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source; fisher install jorgebucaran/fisher' \
+            </dev/null \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Fisher instalado."
+
+        else
+
+            error "Falha ao instalar Fisher."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # ========================================================
+    # TIDE
+    # ========================================================
+
+    title "INSTALANDO TIDE"
+
+
+    if fish -c 'type -q tide' >/dev/null 2>&1; then
+
+        success "Tide já está instalado."
+
+    else
+
+        info "Instalando Tide v6..."
+
+
+        if fish -c \
+            'fisher install IlanCosman/tide@v6' \
+            </dev/null \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Tide instalado."
+
+        else
+
+            error "Falha ao instalar Tide."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # ========================================================
+    # LIMPAR FISH_PLUGINS
+    # ========================================================
+
+    title "PREPARANDO PLUGINS DO FISH"
+
+
+    limpar_fish_plugins
+
+
+    # --------------------------------------------------------
+    # MOSTRAR PLUGINS ENCONTRADOS
+    # --------------------------------------------------------
+
+    if [ -f "$FISH_PLUGINS" ]; then
+
+        info "Plugins registrados no Fish:"
+
+        cat "$FISH_PLUGINS" | tee -a "$LOG_FILE"
+
+        echo
+
+    fi
+
+
+    # ========================================================
+    # FISHER UPDATE
+    # ========================================================
+
+    info "Atualizando plugins do Fish..."
+
+
+    if fish -c 'fisher update' \
+        </dev/null \
+        2>&1 | tee -a "$LOG_FILE"; then
+
+        success "Plugins do Fish atualizados."
+
+    else
+
+        warning "Não foi possível atualizar todos os plugins."
+
+    fi
+
+
+    # ========================================================
+    # VERIFICAÇÕES
+    # ========================================================
+
+    verificar_comando fish
+
+
+    if dpkg-query -W -f='${Status}' ghostty 2>/dev/null \
+        | grep -q "install ok installed" && command -v ghostty >/dev/null 2>&1; then
+
+        success "Ghostty .deb verificado."
+
+    else
+
+        warning "Ghostty .deb não pôde ser verificado."
+
+    fi
+
+
+    if fish -c 'type -q fisher' >/dev/null 2>&1; then
+
+        success "Fisher verificado."
+
+    else
+
+        warning "Fisher não pôde ser verificado."
+
+    fi
+
+
+    if fish -c 'type -q tide' >/dev/null 2>&1; then
+
+        success "Tide verificado."
+
+    else
+
+        warning "Tide não pôde ser verificado."
+
+    fi
+
+
+    if [ -f "$FISH_CONFIG" ] &&
+       grep -q '^function cat$' "$FISH_CONFIG" 2>/dev/null; then
+
+        success 'Função "cat" -> "batcat" verificada no Fish.'
+
+    else
+
+        warning 'A função "cat" -> "batcat" não foi encontrada no Fish.'
+
+    fi
+
+
+    touch "$MARCADOR_ETAPA4"
+
+
+    success "Etapa 4 concluída."
+
+}
+
+
+# ============================================================
+# RECONFIGURAR TIDE
+# ============================================================
+
+perguntar_reconfigurar_tide() {
+
+    local resposta
+
+
+    if ! command -v fish >/dev/null 2>&1; then
+
+        return 0
+
+    fi
+
+
+    if ! fish -c 'type -q tide' >/dev/null 2>&1; then
+
+        return 0
+
+    fi
+
+
+    title "RECONFIGURAÇÃO DO TIDE"
+
+
+    echo "O Tide já está instalado no Fish."
+    echo
+    echo "Você pode executar novamente a configuração interativa"
+    echo "do Tide para alterar a aparência e o comportamento do prompt."
+    echo
+
+
+    while true; do
+
+        read -r \
+            -p "Deseja reconfigurar o Fish usando 'tide configure'? [s/N]: " \
+            resposta \
+            </dev/tty
+
+
+        case "$resposta" in
+
+            S|s|SIM|sim|Sim)
+
+                echo
+
+                info "Iniciando a configuração do Tide..."
+
+                echo
+
+
+                if fish -c 'tide configure' </dev/tty; then
+
+                    success "Configuração do Tide concluída."
+
+                else
+
+                    warning "Configuração do Tide cancelada ou encerrada com erro."
+
+                fi
+
+
+                return 0
+
+                ;;
+
+            ""|N|n|NAO|nao|Nao|NÃO|não)
+
+                info "Reconfiguração do Tide ignorada."
+
+                return 0
+
+                ;;
+
+            *)
+
+                warning "Digite S para sim ou N para não."
+
+                ;;
+
+        esac
+
+    done
+
+}
+
+
+# ============================================================
+# CONFIGURAR TERMINAL GRÁFICO
+# ============================================================
+
+configurar_terminal_grafico() {
+
+    local terminal="$1"
+    local comando=""
+    local configurado=0
+    local caminho_terminal=""
+
+
+    case "$terminal" in
+
+        terminator)
+
+            comando="terminator"
+
+            ;;
+
+        ghostty)
+
+            comando="ghostty"
+
+            ;;
+
+        *)
+
+            error "Terminal gráfico inválido."
+
+            return 1
+
+            ;;
+
+    esac
+
+
+    title "CONFIGURANDO TERMINAL GRÁFICO"
+
+
+    info "Terminal escolhido: $terminal"
+
+
+    # ========================================================
+    # GNOME / UBUNTU
+    # ========================================================
+
+    if command -v gsettings >/dev/null 2>&1; then
+
+        if gsettings list-schemas 2>/dev/null \
+            | grep -qx 'org.gnome.desktop.default-applications.terminal'; then
+
+
+            if gsettings set \
+                org.gnome.desktop.default-applications.terminal \
+                exec \
+                "$comando" \
+                2>&1 | tee -a "$LOG_FILE"; then
+
+                success "Terminal configurado pelo GNOME."
+
+                configurado=1
+
+            fi
+
+        fi
+
+
+        # ====================================================
+        # CINNAMON / LINUX MINT
+        # ====================================================
+
+        if gsettings list-schemas 2>/dev/null \
+            | grep -qx 'org.cinnamon.desktop.default-applications.terminal'; then
+
+
+            if gsettings set \
+                org.cinnamon.desktop.default-applications.terminal \
+                exec \
+                "$comando" \
+                2>&1 | tee -a "$LOG_FILE"; then
+
+                success "Terminal configurado pelo Cinnamon."
+
+                configurado=1
+
+            fi
+
+        fi
+
+    fi
+
+
+    # ========================================================
+    # XFCE
+    # ========================================================
+
+    if [ "$configurado" -eq 0 ] &&
+       command -v xfconf-query >/dev/null 2>&1; then
+
+
+        if xfconf-query \
+            -c xfce4-session \
+            -p /general/TerminalEmulator \
+            -s "$comando" \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Terminal configurado pelo XFCE."
+
+            configurado=1
+
+        fi
+
+    fi
+
+
+    # ========================================================
+    # X-TERMINAL-EMULATOR
+    # ========================================================
+
+    if command -v update-alternatives >/dev/null 2>&1; then
+
+        case "$terminal" in
+
+            terminator)
+
+                caminho_terminal="$(command -v terminator 2>/dev/null || true)"
+
+                ;;
+
+            ghostty)
+
+                if command -v ghostty >/dev/null 2>&1; then
+
+                    caminho_terminal="$(command -v ghostty)"
+
+                fi
+
+                ;;
+
+        esac
+
+
+        if [ -n "$caminho_terminal" ] &&
+           [ -x "$caminho_terminal" ]; then
+
+
+            atualizar_sudo
+
+
+            sudo update-alternatives \
+                --install \
+                /usr/bin/x-terminal-emulator \
+                x-terminal-emulator \
+                "$caminho_terminal" \
+                50 \
+                2>&1 | tee -a "$LOG_FILE" || true
+
+
+            sudo update-alternatives \
+                --set \
+                x-terminal-emulator \
+                "$caminho_terminal" \
+                2>&1 | tee -a "$LOG_FILE" || true
+
+
+            success "x-terminal-emulator configurado."
+
+        fi
+
+    fi
+
+
+    if [ "$configurado" -eq 1 ]; then
+
+        success "Terminal gráfico padrão: $terminal"
+
+    else
+
+        warning "O ambiente gráfico não possui uma configuração automática reconhecida."
+        warning "O terminal foi instalado, mas pode ser necessário defini-lo manualmente."
+
+    fi
+
+}
+
+
+# ============================================================
+# RESTAURAR TERMINAL GRÁFICO PADRÃO
+# ============================================================
+
+restaurar_terminal_grafico_padrao() {
+
+    title "RESTAURANDO TERMINAL GRÁFICO PADRÃO"
+
+
+    local restaurado=0
+
+
+    # GNOME / UBUNTU
+    if command -v gsettings >/dev/null 2>&1; then
+
+        if gsettings list-schemas 2>/dev/null \
+            | grep -qx 'org.gnome.desktop.default-applications.terminal'; then
+
+            info "Restaurando configuração padrão do GNOME..."
+
+            if gsettings reset \
+                org.gnome.desktop.default-applications.terminal \
+                exec \
+                2>&1 | tee -a "$LOG_FILE"; then
+
+                success "Configuração do terminal do GNOME restaurada."
+
+                restaurado=1
+
+            fi
+
+        fi
+
+
+        # CINNAMON / LINUX MINT
+        if gsettings list-schemas 2>/dev/null \
+            | grep -qx 'org.cinnamon.desktop.default-applications.terminal'; then
+
+            info "Restaurando configuração padrão do Cinnamon..."
+
+            if gsettings reset \
+                org.cinnamon.desktop.default-applications.terminal \
+                exec \
+                2>&1 | tee -a "$LOG_FILE"; then
+
+                success "Configuração do terminal do Cinnamon restaurada."
+
+                restaurado=1
+
+            fi
+
+        fi
+
+    fi
+
+
+    # XFCE
+    if command -v xfconf-query >/dev/null 2>&1; then
+
+        info "Tentando restaurar configuração do XFCE..."
+
+        if xfconf-query \
+            -c xfce4-session \
+            -p /general/TerminalEmulator \
+            -r \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "Configuração do XFCE restaurada."
+
+            restaurado=1
+
+        fi
+
+    fi
+
+
+    # X-TERMINAL-EMULATOR
+    if command -v update-alternatives >/dev/null 2>&1; then
+
+        info "Restaurando x-terminal-emulator para modo automático..."
+
+        atualizar_sudo
+
+        if sudo update-alternatives \
+            --auto x-terminal-emulator \
+            2>&1 | tee -a "$LOG_FILE"; then
+
+            success "x-terminal-emulator restaurado para modo automático."
+
+            restaurado=1
+
+        else
+
+            warning "Não foi possível restaurar x-terminal-emulator."
+
+        fi
+
+    fi
+
+
+    TERMINAL_GRAFICO="padrão do sistema"
+
+
+    if [ "$restaurado" -eq 1 ]; then
+
+        success "Terminal gráfico restaurado para o padrão do sistema."
+
+    else
+
+        warning "Não foi encontrada uma configuração automática para restaurar."
+        warning "O sistema manterá sua configuração atual."
+
+    fi
+
+}
+
+
+# ============================================================
+# PERSONALIZAR O GHOSTTY
+# ============================================================
+
+personalizar_ghostty() {
+
+    local resposta
+    # A imagem agora fica em uma pasta oculta dedicada ao Ghostty
+    local diretorio_imagens="$HOME_USUARIO/.imagemghostty"
+    local imagem="$HOME_USUARIO/.imagemghostty/1295199.jpg"
+    local config_dir="$HOME_USUARIO/.config/ghostty"
+    local config="$config_dir/config"
+    # URL válida e única (a versão anterior usava $https:// por engano)
+    local url_imagem="https://images.alphacoders.com/129/thumb-1920-1295199.jpg"
+
+    echo
+
+    echo "Quer deixar o Ghostty mais bonito com imagem de fundo e fonte personalizada?"
+
+    while true; do
+        read -r -p "Deseja aplicar a personalização? [s/N]: " resposta </dev/tty
+        case "$resposta" in
+            S|s|SIM|sim|Sim)
+                break
+                ;;
+            ""|N|n|NAO|nao|Nao|NÃO|não)
+                info "Personalização do Ghostty ignorada."
+                return 0
+                ;;
+            *)
+                warning "Responda s para sim ou n para não."
+                ;;
+        esac
+    done
+
+    mkdir -p "$diretorio_imagens" "$config_dir" || return 1
+
+    if [ ! -s "$imagem" ]; then
+        info "Baixando a imagem de fundo do Ghostty..."
+        if ! curl -fL --retry 2 --connect-timeout 15 "$url_imagem" -o "$imagem.part" 2>&1 | tee -a "$LOG_FILE"; then
+            rm -f "$imagem.part"
+            error "Não foi possível baixar a imagem de fundo. A configuração não foi alterada."
+            return 1
+        fi
+        if ! file "$imagem.part" 2>/dev/null | grep -qiE 'image|JPEG'; then
+            rm -f "$imagem.part"
+            error "O arquivo baixado não parece ser uma imagem válida. A configuração não foi alterada."
+            return 1
+        fi
+        mv "$imagem.part" "$imagem" || return 1
+        success "Imagem de fundo baixada em: $imagem"
+    else
+        info "A imagem já existe; não será baixada novamente."
+    fi
+
+    if ! fc-list 2>/dev/null | grep -qi 'JetBrains Mono'; then
+        info "Instalando a fonte JetBrains Mono..."
+        if ! instalar_pacote fonts-jetbrains-mono; then
+            warning "Não foi possível instalar JetBrains Mono; o Ghostty poderá usar uma fonte substituta."
+        fi
+    fi
+
+    touch "$config" || return 1
+
+    # Verifica dependência do awk antes de usá-lo
+    if ! command -v awk >/dev/null 2>&1; then
+        error "awk não está disponível; não é possível atualizar a configuração do Ghostty."
+        return 1
+    fi
+
+    # Atualiza apenas o bloco gerenciado pelo script, preservando outras opções.
+    local temporario
+    temporario="$(mktemp)" || return 1
+    if [ -f "$config" ]; then
+        awk '
+            /^# BEGIN PREPARACAO_SO_GHOSTTY_THEME$/ {skip=1; next}
+            /^# END PREPARACAO_SO_GHOSTTY_THEME$/ {skip=0; next}
+            !skip {print}
+        ' "$config" > "$temporario"
+    fi
+
+    cat >> "$temporario" <<EOF
+
+# BEGIN PREPARACAO_SO_GHOSTTY_THEME
+# Personalização opcional instalada pelo script de preparação
+background-image = $imagem
+background = 101018
+background-image-fit = cover
+background-opacity = 1
+background-blur = 10
+background-image-opacity = 0.35
+font-size = 12
+font-family = JetBrains Mono
+font-thicken = true
+gtk-single-instance = true
+# END PREPARACAO_SO_GHOSTTY_THEME
+EOF
+
+    if mv "$temporario" "$config"; then
+        success "Ghostty personalizado. Configuração salva em $config"
+    else
+        rm -f "$temporario"
+        error "Não foi possível salvar a configuração do Ghostty."
+        return 1
+    fi
+
+    # --------------------------------------------------------
+    # RECARREGAR O GHOSTTY AUTOMATICAMENTE
+    # --------------------------------------------------------
+    # O Ghostty escuta SIGUSR2 para recarregar a configuração
+    # sem precisar ser fechado e reaberto.
+    # Se o processo não estiver rodando, a configuração será
+    # aplicada naturalmente na próxima abertura.
+
+    if pgrep -x ghostty >/dev/null 2>&1; then
+
+        info "Recarregando configuração do Ghostty..."
+
+        if pkill -SIGUSR2 -x ghostty 2>/dev/null; then
+
+            success "Sinal de recarga enviado ao Ghostty."
+
+        else
+
+            warning "Não foi possível enviar o sinal de recarga ao Ghostty."
+            warning "Feche e abra o Ghostty manualmente para aplicar."
+
+        fi
+
+    else
+
+        info "Ghostty não está em execução; a configuração será aplicada na próxima abertura."
+
+    fi
+}
+
+
+# ============================================================
+# ESCOLHER TERMINAL GRÁFICO
+# ============================================================
+
+escolher_terminal_grafico() {
+
+    local escolha
+
+
+    title "ESCOLHA DO TERMINAL GRÁFICO PADRÃO"
+
+
+    echo "Escolha qual aplicativo será utilizado como terminal gráfico:"
+    echo
+    echo "  1) Terminal padrão do sistema"
+    echo "  2) Terminator"
+    echo "  3) Ghostty"
+    echo
+
+
+    while true; do
+
+        read -r \
+            -p "Digite 1, 2 ou 3: " \
+            escolha \
+            </dev/tty
+
+
+        case "$escolha" in
+
+            1)
+
+                restaurar_terminal_grafico_padrao
+
+                return 0
+
+                ;;
+
+            2)
+
+                if ! command -v terminator >/dev/null 2>&1; then
+
+                    error "Terminator não está instalado."
+                    warning "Execute a Etapa 2 antes de escolhê-lo."
+
+                    continue
+
+                fi
+
+
+                TERMINAL_GRAFICO="terminator"
+
+
+                configurar_terminal_grafico "terminator"
+
+
+                return 0
+
+                ;;
+
+            3)
+
+                if command -v ghostty >/dev/null 2>&1; then
+
+                    TERMINAL_GRAFICO="ghostty"
+
+                else
+
+                    error "Ghostty não está instalado."
+                    warning "Execute a Etapa 4 antes de escolhê-lo."
+
+                    continue
+
+                fi
+
+
+                configurar_terminal_grafico "ghostty"
+
+                personalizar_ghostty || warning "A personalização do Ghostty não foi concluída."
+
+                return 0
+
+                ;;
+
+            *)
+
+                warning "Escolha inválida."
+
+                ;;
+
+        esac
+
+    done
+
+}
+
+
+# ============================================================
+# ALTERAR SHELL PADRÃO
+# ============================================================
+
+alterar_shell_padrao() {
+
+    local shell_nome="$1"
+    local shell_caminho=""
+    local shell_atual=""
+
+
+    case "$shell_nome" in
+
+        zsh)
+
+            shell_caminho="$(command -v zsh 2>/dev/null || true)"
+
+            ;;
+
+        fish)
+
+            shell_caminho="$(command -v fish 2>/dev/null || true)"
+
+            ;;
+
+        *)
+
+            error "Shell inválido."
+
+            return 1
+
+            ;;
+
+    esac
+
+
+    if [ -z "$shell_caminho" ]; then
+
+        error "O shell $shell_nome não está instalado."
+
+        return 1
+
+    fi
+
+
+    title "ALTERANDO SHELL PADRÃO"
+
+
+    info "Shell escolhido: $shell_nome"
+    info "Caminho: $shell_caminho"
+
+
+    # --------------------------------------------------------
+    # /etc/shells
+    # --------------------------------------------------------
+
+    if ! grep -Fxq "$shell_caminho" /etc/shells 2>/dev/null; then
+
+        info "Adicionando shell ao /etc/shells..."
+
+        atualizar_sudo
+
+
+        if ! printf '%s\n' "$shell_caminho" \
+            | sudo tee -a /etc/shells >/dev/null; then
+
+            error "Não foi possível adicionar o shell."
+
+            return 1
+
+        fi
+
+    fi
+
+
+    # --------------------------------------------------------
+    # CHSH
+    # --------------------------------------------------------
+
+    atualizar_sudo
+
+
+    if sudo chsh \
+        -s "$shell_caminho" \
+        "$USUARIO_ATUAL" \
+        2>&1 | tee -a "$LOG_FILE"; then
+
+        success "Shell padrão alterado para $shell_nome."
+
+    else
+
+        error "Não foi possível alterar o shell padrão."
+
+        return 1
+
+    fi
+
+
+    # --------------------------------------------------------
+    # VERIFICAR
+    # --------------------------------------------------------
+
+    shell_atual="$(getent passwd "$USUARIO_ATUAL" | cut -d: -f7)"
+
+
+    if [ "$shell_atual" = "$shell_caminho" ]; then
+
+        success "Shell confirmado:"
+        success "$shell_atual"
+
+    else
+
+        warning "Não foi possível confirmar o shell."
+        warning "Shell encontrado: $shell_atual"
+
+    fi
+
+}
+
+
+# ============================================================
+# ESCOLHER SHELL
+# ============================================================
+
+escolher_shell() {
+
+    local escolha
+
+
+    title "ESCOLHA DO SHELL PADRÃO"
+
+
+    echo "Escolha qual shell será utilizado por padrão:"
+    echo
+    echo "  1) Zsh"
+    echo "  2) Fish"
+    echo
+
+
+    while true; do
+
+        read -r \
+            -p "Digite 1 ou 2: " \
+            escolha \
+            </dev/tty
+
+
+        case "$escolha" in
+
+            1)
+
+                if ! command -v zsh >/dev/null 2>&1; then
+
+                    error "Zsh não está instalado."
+                    warning "Execute a Etapa 1 antes de escolhê-lo."
+
+                    continue
+
+                fi
+
+
+                SHELL_PADRAO="zsh"
+
+                break
+
+                ;;
+
+            2)
+
+                if ! command -v fish >/dev/null 2>&1; then
+
+                    error "Fish não está instalado."
+                    warning "Execute a Etapa 4 antes de escolhê-lo."
+
+                    continue
+
+                fi
+
+
+                SHELL_PADRAO="fish"
+
+                break
+
+                ;;
+
+            *)
+
+                warning "Escolha inválida."
+
+                ;;
+
+        esac
+
+    done
+
+
+    alterar_shell_padrao "$SHELL_PADRAO"
+
+}
+
+
+# ============================================================
+# EXECUTAR ETAPAS
+# ============================================================
+
+executar_etapa1
+executar_etapa2
+executar_etapa3
+executar_etapa4
+
+
+# ============================================================
+# PERGUNTAR SOBRE RECONFIGURAÇÃO DO TIDE
+# ============================================================
+
+perguntar_reconfigurar_tide
+
+
+# ============================================================
+# ESCOLHA DO TERMINAL GRÁFICO
+# ============================================================
+
+escolher_terminal_grafico
+
+
+# ============================================================
+# ESCOLHA DO SHELL
+# ============================================================
+
+escolher_shell
+
+
+# ============================================================
+# RESUMO FINAL
+# ============================================================
+
+title "PREPARAÇÃO CONCLUÍDA"
+
+
+echo
+
+success "Configuração final:"
+
+echo
+
+echo "  Distribuição:"
+echo "    ${PRETTY_NAME:-$DISTRIBUICAO}"
+
+echo
+
+echo "  Terminal gráfico:"
+echo "    ${TERMINAL_GRAFICO:-não definido}"
+
+echo
+
+echo "  Shell padrão:"
+echo "    ${SHELL_PADRAO:-não definido}"
+
+echo
+
+echo "  Log:"
+echo "    $LOG_FILE"
+
+echo
+
+echo "  Diretório de logs:"
+echo "    $LOG_DIRETORIO"
+
+echo
+
+echo "  Marcadores:"
+echo "    $MARCADOR_ETAPA1"
+echo "    $MARCADOR_ETAPA2"
+echo "    $MARCADOR_ETAPA3"
+echo "    $MARCADOR_ETAPA4"
+
+echo
+
+warning "A alteração do shell entra em vigor em uma nova sessão."
+
+echo
+echo "Feche o terminal atual e abra um novo terminal."
+echo
+
+echo "Configurações possíveis:"
+echo
+echo "  Ghostty + Fish"
+echo "  Ghostty + Zsh"
+echo "  Terminator + Fish"
+echo "  Terminator + Zsh"
+echo "  Terminal padrão do sistema + Fish"
+echo "  Terminal padrão do sistema + Zsh"
+echo
+
+success "Script finalizado."
