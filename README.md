@@ -289,7 +289,7 @@ curl -fsSL https://raw.githubusercontent.com/FrangoHub/preparacao-sistemas-opera
 | Arrays com resumo final | ✅ | ❌ | ❌ | ❌ |
 | Log em `/var/log/...` | ❌ | ✅ | ✅ | ✅ |
 | Log em `~/...` | ✅ | ❌ | ❌ | ❌ |
-| Tratamento do bloqueio do Snap no Linux Mint | ✅ | ✅ | ✅ | ✅ |
+| Tratamento do bloqueio do Snap| ✅ | ✅ | ✅ | ✅ |
 
 ---
 
