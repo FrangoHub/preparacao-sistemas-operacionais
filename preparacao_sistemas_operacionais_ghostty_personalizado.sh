@@ -1167,7 +1167,7 @@ executar_etapa3() {
     atualizar_repositorios || return 1
 
 
-    instalar_pacote neofetch || return 1
+    instalar_pacote fastfetch || return 1
     instalar_pacote jq || return 1
     instalar_pacote bat || return 1
 
@@ -1189,7 +1189,7 @@ executar_etapa3() {
     # VERIFICAÇÕES
     # --------------------------------------------------------
 
-    verificar_comando neofetch
+    verificar_comando fastfetch
     verificar_comando jq
     verificar_comando batcat
 
