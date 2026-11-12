@@ -460,3 +460,5 @@ Este projeto foi desenvolvido como parte das atividades da disciplina de **Siste
 ## Licença
 
 Este projeto é disponibilizado para fins educacionais.
+
+## Estive aqui <3
